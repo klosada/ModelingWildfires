@@ -1,9 +1,9 @@
 # Modeling Wildfire Spread in California with Cellular Automata 
 ## CSE 6730 Spring 2025
 ## Group 4
-Team Member
-- Gabriel Appiah
+Team Members
 - Katherine Losada
+- Gabriel Appiah
 - Kshitij Sawant
 - Thanawit Suwannikom
 
