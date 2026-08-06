@@ -41,14 +41,14 @@ Large rasters are not committed. `landuse.tif`, `NDVI.tif`, and `SlopeExport.tif
 
 ## Tools and workflow
 
-Python: `numpy` (grid propagation), `rasterio` (raster I/O and alignment), `geopandas`/`shapely` (perimeter geometry, IoU), `scikit-learn` (ROC/AUC), `matplotlib` and `folium` (visualization), Google Earth Engine Python API.
+**Python:** `numpy` (grid state and propagation), `rasterio` (raster I/O and alignment), `pandas`/`geopandas`/`shapely` (wind time series, perimeter geometry, and IoU), `scikit-image` (resampling rasters onto the simulation grid), `requests` (elevation and Open-Meteo API calls), `matplotlib`/`folium` (visualization and web maps). 
 
-1. **Acquire** — pull imagery and terrain from GEE, wind from Open-Meteo (`gee-imagery-explore.ipynb`)
-2. **Align** — reproject and resample all layers to a shared grid (`Rastertransform.py`)
-3. **Derive inputs** — slope from elevation, vegetation density from NDVI, fuel factors from land cover (`VegetationType.ipynb`, `wind-factor.ipynb`)
-4. **Estimate ignition probability** (`ignition-model.ipynb`)
-5. **Simulate** — `baseline-model.ipynb` for the simplified case, `ActualCA.ipynb` for full runs, `Experimentation.ipynb` for parameter sweeps
-6. **Validate** — AUC for the ignition surface, IoU for burn extent vs. observed perimeters (`validation.ipynb`, `Experimentation_validation.ipynb`)
+1. **Acquire:** pull imagery and terrain from GEE, wind from Open-Meteo (`gee-imagery-explore.ipynb`, `wind-factor.ipynb`)
+2. **Align:** reproject and resample all layers to a shared grid (`Rastertransform.py`)
+3. **Derive inputs:** slope from elevation, vegetation density from NDVI, fuel factors from land cover (`VegetationType.ipynb`, `Vegetation_Density_Simulation.ipynb`)
+4. **Estimate ignition probability:** (`ignition-model.ipynb`)
+5. **Simulate:** `baseline-model.ipynb` for the simplified case, `ActualCA.ipynb` for full runs, `Experimentation.ipynb` for parameter sweeps
+6. **Validate:** IoU for burn extent vs. observed perimeters (`validation.ipynb`, `Experimentation_validation.ipynb`)
 
 ## Results
 
@@ -81,6 +81,6 @@ Lightning density and fire history were not obtained as observed data. Both are 
 
 **Team:** Katherine Losada, Thanawit Suwannikom, Gabriel Appiah, Kshitij Sawant
 
-**My contributions:** built the raster data pipeline for the fire spread model: acquired and preprocessed satellite imagery in Google Earth Engine using the GEE Python API, derived NDVI from Landsat 9, and reclassified Google Dynamic World land cover classes into vegetation fuel types; aligned all layers to a common grid, resolution, and coordinate system in Python so they could drive the simulation.
+**My contributions:** Built the raster data pipeline for the fire spread model: acquired and preprocessed satellite imagery in Google Earth Engine, derived NDVI from Landsat 9, and reclassified Google Dynamic World land cover classes into vegetation fuel types. Aligned all layers to a common grid, resolution, and coordinate system in Python so they could drive the simulation.
 
 **Reference:** Alexandridis, A., et al. (2008). A cellular automata model for forest fire spread prediction. *Applied Mathematics and Computation*, 204(1), 191–201.
