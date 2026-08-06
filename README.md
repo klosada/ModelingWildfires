@@ -19,7 +19,7 @@ This project simulates where a wildfire is likely to burn across a real landscap
 P = P0 · (1 + P_veg) · (1 + P_den) · exp(C1·V) · exp(C2·V·(cos θ − 1)) · exp(A·slope)
 ```
 
-with `P0 = 0.58`, `C1 = 0.045`, `C2 = 0.131`, `A = 0.078`, where `V` is wind speed and `θ` the angle between wind and spread direction. `P_veg` is derived from NDVI-based vegetation density, `P_den` from land cover class flammability.
+`P0 = 0.58`, `C1 = 0.045`, `C2 = 0.131`, `A = 0.078`, where `V` is wind speed and `θ` the angle between wind and spread direction. `P_veg` is derived from NDVI-based vegetation density, `P_den` from land cover class flammability.
 
 Simulated burn extents were compared against observed fire perimeter polygons using intersection over union (IoU), the ratio of overlapping area to total combined area. 
 
@@ -41,7 +41,7 @@ Large rasters are not committed. `landuse.tif`, `NDVI.tif`, and `SlopeExport.tif
 
 ## Tools and workflow
 
-**Python:** `numpy` (grid state and propagation), `rasterio` (raster I/O and alignment), `pandas`/`geopandas`/`shapely` (wind time series, perimeter geometry, and IoU), `scikit-image` (resampling rasters onto the simulation grid), `requests` (elevation and Open-Meteo API calls), `matplotlib`/`folium` (visualization and web maps). 
+**Python:** `numpy` grid state and propagation; `rasterio` raster I/O and alignment; `pandas`/`geopandas`/`shapely` wind time series, perimeter geometry, and IoU; `scikit-image` resampling rasters onto the simulation grid; `requests` elevation and Open-Meteo API calls; `matplotlib`/`folium` visualization and web maps. 
 
 1. **Acquire:** pull imagery and terrain from GEE, wind from Open-Meteo (`gee-imagery-explore.ipynb`, `wind-factor.ipynb`)
 2. **Align:** reproject and resample all layers to a shared grid (`Rastertransform.py`)
