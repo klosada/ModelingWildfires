@@ -1,11 +1,11 @@
 # Modeling Wildfire Spread from Satellite Imagery and Environmental Data
 
-**A grid-based burn/wildfire simulation (cellular automata approach) driven by Landsat vegetation indices, 10 m land cover, terrain, and wind, validated against observed fire perimeters.** 
-
-Built for a Modeling & Simulation course at Georgia Tech, Spring 2025.
+A grid-based wildfire simulation (cellular automata approach) driven by Landsat vegetation indices, 10 m land cover, terrain, and wind, validated against observed fire perimeters.
 
 **Study area:** Ten counties in the greater Los Angeles region  
 **Validation events:** Rabbit Fire and Rinconada Fire (2023)
+
+Built for a Modeling & Simulation course at Georgia Tech, Spring 2025.
 
 ## Overview
 
