@@ -1,1 +1,23 @@
+# --- secrets / tokens ---
+# (commit web/js/config.example.js instead of config.js)
 config.json
+web/js/config.js
+
+# --- large downloaded rasters (regenerate via scripts/gee_export.js) ---
+data/*.tif
+data/*.tiff
+*.tif
+*.tiff
+# web/data/layers.json IS committed on purpose — the demo fetches it at runtime.
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- node ---
+node_modules/
+
+# --- os / editor ---
+.DS_Store

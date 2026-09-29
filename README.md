@@ -1,15 +1,15 @@
 # Modeling Wildfire Spread from Satellite Imagery and Environmental Data
 
-A grid-based wildfire simulation (cellular automata approach) driven by Landsat vegetation indices, 10 m land cover, terrain, and wind, validated against observed fire perimeters.
-
-**Study area:** Ten counties in the greater Los Angeles region  
-**Validation events:** Rabbit Fire and Rinconada Fire (2023)
+**Study area:** Riverside County, California  
+**Validation events:** Rabbit Fire (2023)
 
 Built for a Modeling & Simulation course at Georgia Tech, Spring 2025.
 
+Later independently expanded into a geospatial web app with interactive dashboards.
+
 ## Overview
 
-This project simulates where a wildfire is likely to burn across a real landscape using only open geospatial data. Ten counties in the greater Los Angeles region were assembled into a multi-layer raster stack from Landsat 9 imagery, 10 m land cover, elevation, and hourly weather data, all reprojected and resampled onto a common grid. That stack drives two linked components: a model of where fires are likely to start, and a cellular automata model of how they spread.
+This project simulates where a wildfire is likely to burn across a real landscape using open geospatial data. Riverside county was assembled into a multi-layer raster stack from Landsat 9 imagery, 10 m land cover, elevation, and hourly weather data, all reprojected and resampled onto a common grid. That stack drives two linked components: a model of where fires are likely to start, and a cellular automata model of how they spread.
 
 **Ignition model:** A weighted overlay of eight normalized environmental layers (vegetation density, drought index, surface temperature, slope, land cover, road proximity, lightning density, and fire history). Each layer carries a literature-derived weight. The weighted layers are summed and rescaled to a 0–1 ignition probability using a logistic function, ranking every cell by likelihood of ignition.
 
@@ -19,7 +19,7 @@ This project simulates where a wildfire is likely to burn across a real landscap
 P = P0 · (1 + P_veg) · (1 + P_den) · exp(C1·V) · exp(C2·V·(cos θ − 1)) · exp(A·slope)
 ```
 
-`P0 = 0.58`, `C1 = 0.045`, `C2 = 0.131`, `A = 0.078`, where `V` is wind speed and `θ` the angle between wind and spread direction. `P_veg` is derived from NDVI-based vegetation density, `P_den` from land cover class flammability.
+`P0 = 0.58`, `C1 = 0.045`, `C2 = 0.131`, `A = 0.078`, where `V` is wind speed and `θ` the angle between wind and spread direction. `P_veg` is NDVI (vegetation greenness), and `P_den` is the flammability factor for its land cover class.
 
 Simulated burn extents were compared against observed fire perimeter polygons using intersection over union (IoU), the ratio of overlapping area to total combined area. 
 
@@ -55,11 +55,10 @@ Large rasters are not committed. `landuse.tif`, `NDVI.tif`, and `SlopeExport.tif
 | Fire (2023) | IoU vs. observed perimeter |
 |---|---|
 | Rabbit Fire | 0.529 |
-| Rinconada Fire | 0.052 |
 
 Land cover controlled spread more than any other input: built-up areas, crops, and bare ground acted as firebreaks, water as an absolute barrier, and fire moved fastest through tree cover. Wind direction determined which way the fire advanced. 
 
-The gap between the two validation fires is the most informative result. It points to suppression activity, local microclimate, and terrain-channeled wind, none of which a spatially uniform wind field can represent.
+The moderate IoU reflects factors the model cannot capture: suppression activity, local microclimate, and terrain-channeled wind, none of which a spatially uniform wind field can represent.
 
 Full figures and derivations are in `Team4_FinalReport.pdf`.
 
@@ -84,3 +83,13 @@ Lightning density and fire history were not obtained as observed data. Both are 
 **My contributions:** Built the raster data pipeline for the fire spread model: acquired and preprocessed satellite imagery in Google Earth Engine, derived NDVI from Landsat 9, and reclassified Google Dynamic World land cover classes into vegetation fuel types. Aligned all layers to a common grid, resolution, and coordinate system in Python so they could drive the simulation.
 
 **Reference:** Alexandridis, A., et al. (2008). A cellular automata model for forest fire spread prediction. *Applied Mathematics and Computation*, 204(1), 191–201.
+
+## Interactive geospatial dashboard
+
+An independent continuation of this project, built after the course to refine the model and develop it into an interactive geospatial platform. This extension is my own work.
+
+The dashboard runs the wildfire spread model live in the browser as two linked interactive simulations. The first uses the same California study area and data from the course project, animating fire propagation over an interactive map so the calibrated model can be explored step by step. The second is a sandbox that lets users explore how wildfires spread across a randomly generated landscape, showing how burn behavior depends on land cover, terrain, vegetation, and wind. Every parameter can be customized, so users can experiment with how each environmental driver shapes fire spread in real time.
+
+The California map is driven by the observed wind from the Rabbit Fire day (Jul 14, 2023), pulled from Open-Meteo's historical archive, a refinement over the course project's generic wind field.
+
+**Built with:** Mapbox GL JS (interactive WebGL mapping), Google Earth Engine (remote-sensing data export), and Python (rasterio, NumPy) for the geospatial data pipeline.
