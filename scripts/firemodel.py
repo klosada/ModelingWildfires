@@ -7,6 +7,7 @@ Each step, every burning cell tries to ignite its 8 neighbors with probability
 (Alexandridis et al. 2008; terms defined in the README).
 Per-cell inputs: land cover, NDVI, slope. Wind is uniform across the grid.
 Also includes a simplified ignition model and validation (IoU vs observed).
+Optional diagonal correction (diagonal_delay): see FireModel.tick.
 
 Ported unchanged from notebooks/ActualCA.ipynb (the validated model).
 web/js/model.js is a line-for-line JavaScript copy for the browser.
@@ -58,10 +59,11 @@ class FireModel:
     seed      : random seed (same seed = same run).
     residence_time : steps a cell burns before burning out.
     spotting  : optional ember spotting (default off).
+    diagonal_delay : optional diagonal correction (default off); see tick().
     """
 
     def __init__(self, landcover, ndvi, slope, coeffs=None, seed=0,
-                 residence_time=3, spotting=False):
+                 residence_time=3, spotting=False, diagonal_delay=False):
         self.landcover = np.asarray(landcover, dtype=np.int64)
         self.ndvi = np.asarray(ndvi, dtype=np.float64)
         self.slope = np.asarray(slope, dtype=np.float64)
@@ -70,6 +72,7 @@ class FireModel:
             self.coeffs.update(coeffs)
         self.residence_time = int(residence_time)
         self.spotting = bool(spotting)
+        self.diagonal_delay = bool(diagonal_delay)
         self.rows, self.cols = self.landcover.shape
         self.reset(seed)
 
@@ -112,33 +115,43 @@ class FireModel:
 
     # -- one timestep -----------------------------------------------------------
     def tick(self, wind_speed, wind_dir):
-        """Advance the fire one step."""
+        """Advance the fire one step.
+
+        Diagonal correction (diagonal_delay): diagonal neighbors are sqrt(2) farther away,
+        so a cell reaches them one step later (ages 3..residence_time instead of
+        2..residence_time-1). Without it, fire reaches diagonals as fast as edge neighbors
+        and burn areas grow as squares.
+        """
         new = self.grid.copy()   # read old grid, write new: all cells update at once
         for row in range(1, self.rows - 1):        # edge cells skipped
             for col in range(1, self.cols - 1):
                 if self.grid[row, col] != BURNING:
                     continue
                 self.burn_age[row, col] += 1
-                if self.burn_age[row, col] == 1:
+                age = self.burn_age[row, col]
+                if age == 1:
                     continue                       # just ignited: wait one step
-                if self.burn_age[row, col] < self.residence_time:
+                burning_out = age >= self.residence_time
+                if not burning_out or self.diagonal_delay:
                     # Try each neighbor, in random order.
                     order = NEIGHBORHOOD[:]
                     self.rng.shuffle(order)
                     for d_row, d_col in order:
+                        if self.diagonal_delay and (age < 3 if d_row and d_col else burning_out):
+                            continue
                         n_row, n_col = row + d_row, col + d_col
                         if self.grid[n_row, n_col] not in (BURNING, BURNED, EMPTY, NODATA):
                             p = self.probability(n_row, n_col, d_row, d_col, wind_speed, wind_dir)
                             if self.rng.random() < p:
                                 new[n_row, n_col] = BURNING
                     # Optional ember spotting: first 11 steps, 1% chance, up to 10 cells away.
-                    if self.spotting and self.step_idx < 11 and self.rng.random() < 0.01:
+                    if self.spotting and not burning_out and self.step_idx < 11 and self.rng.random() < 0.01:
                         s_row = min(max(row + int(self.rng.integers(-10, 10)), 1), self.rows - 2)
                         s_col = min(max(col + int(self.rng.integers(-10, 10)), 1), self.cols - 2)
                         if self.grid[s_row, s_col] not in (BURNING, BURNED, EMPTY, NODATA):
                             if FUEL_TO_FACTOR.get(int(self.landcover[s_row, s_col]), -1) > -0.6:
                                 new[s_row, s_col] = BURNING
-                else:
+                if burning_out:
                     new[row, col] = BURNED             # burned out
         self.grid = new
         self.step_idx += 1
@@ -302,6 +315,7 @@ if __name__ == "__main__":
     r.add_argument("--steps", type=int, default=40)
     r.add_argument("--residence-time", type=int, default=3)
     r.add_argument("--spotting", action="store_true")
+    r.add_argument("--diagonal-delay", action="store_true", help="diagonal correction")
     r.add_argument("--json", action="store_true", help="emit JSON stats")
 
     a = ap.parse_args()
@@ -325,7 +339,8 @@ if __name__ == "__main__":
         ndvi = np.array(d["ndvi"], dtype=np.float64).reshape(n, n)
         slope = np.array(d["slope"], dtype=np.float64).reshape(n, n)
         m = FireModel(lc, ndvi, slope, seed=a.seed,
-                      residence_time=a.residence_time, spotting=a.spotting)
+                      residence_time=a.residence_time, spotting=a.spotting,
+                      diagonal_delay=a.diagonal_delay)
         m.ignite(n // 2, n // 2)
         for _ in range(a.steps):
             m.tick(a.wind_speed, a.wind_dir)

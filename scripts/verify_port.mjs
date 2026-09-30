@@ -8,6 +8,7 @@
  *                       confirming the fire_dir convention.
  *   4. Nodata mask   -- NDVI = -999 cells never ignite.
  *   5. Ignition      -- highest-risk cell is burnable, off the edge, and the max.
+ *   6. Diagonal fix  -- diagonalDelay makes the burn round instead of square.
  *
  * If a layers JSON is passed as argv[2], the model is ALSO run on those exact
  * layers so burned counts can be compared with the Python model:
@@ -145,10 +146,29 @@ console.log("5. Ignition model (highest-risk cell)");
   check("water gets no probability", Number.isNaN(p[10]));
 }
 
+console.log("6. Diagonal correction (burn shape on a flat, uniform grid)");
+{
+  // Reach along the axis vs along the diagonal (in cell widths); 1.41 = square, ~1 = round.
+  const nn = 121, c = (nn / 2) | 0;
+  const lc = new Int32Array(nn * nn).fill(5), ndvi = new Float64Array(nn * nn).fill(0.3), slope = new Float64Array(nn * nn);
+  const ratio = (diagonalDelay) => {
+    const m = new FireModel(lc, ndvi, slope, { rows: nn, cols: nn, seed: 1, residenceTime: 4, diagonalDelay });
+    m.ignite(c, c);
+    for (let s = 0; s < 50; s++) m.tick(0, 0);
+    const b = (r, q) => m.grid[r * nn + q] === 9 || m.grid[r * nn + q] === 10;
+    let ax = 0, dg = 0;
+    for (let k = 1; k < c; k++) { if (b(c, c + k)) ax = k; if (b(c + k, c + k)) dg = k * Math.SQRT2; }
+    return dg / ax;
+  };
+  const r0 = ratio(false), r1 = ratio(true);
+  check("original grows as a square", r0 > 1.2, `diagonal/axis reach = ${r0.toFixed(2)}`);
+  check("corrected grows round", r1 > 0.85 && r1 < 1.1, `diagonal/axis reach = ${r1.toFixed(2)}`);
+}
+
 // --- Optional: run on Python-generated layers for cross-language compare ---
 const layersPath = process.argv[2];
 if (layersPath) {
-  console.log("6. Cross-language layers (" + layersPath + ")");
+  console.log("7. Cross-language layers (" + layersPath + ")");
   const d = JSON.parse(readFileSync(layersPath, "utf8"));
   const nn = d.size;
   const lc = Int32Array.from(d.landcover), ndvi = Float64Array.from(d.ndvi), slope = Float64Array.from(d.slope);

@@ -92,4 +92,8 @@ The dashboard runs the wildfire spread model live in the browser as two linked i
 
 The California map is driven by the observed wind from the Rabbit Fire day (Jul 14, 2023), pulled from Open-Meteo's historical archive, a refinement over the course project's generic wind field.
 
+**Validation in the dashboard:** the simulation is scored live against the observed Rabbit Fire perimeter with IoU, and a Burn Difference map shows matched, over-predicted, and missed cells. Because the model has no suppression, a run stops once it has burned the same area as the real fire (8,355 acres), so IoU measures where the fire burned rather than how long it ran.
+
+**Diagonal correction:** in an 8-neighbor automaton, fire reaches diagonal cells as fast as edge cells even though they are √2 farther away, so burns grow as squares. The corrected model delays spread to diagonal neighbors by one step, which makes burns on uniform terrain close to round and raises the Rabbit Fire IoU from 0.73 to 0.75 (160 × 160 grid, area-matched stop). A Model Difference map compares the two versions' final burns.
+
 **Built with:** Mapbox GL JS (interactive WebGL mapping), Google Earth Engine (remote-sensing data export), and Python (rasterio, NumPy) for the geospatial data pipeline.

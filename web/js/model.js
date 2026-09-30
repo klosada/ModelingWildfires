@@ -3,6 +3,7 @@
  *
  * Same rules, line for line, so the model runs in the browser.
  * Also includes the simplified ignition model and validation (IoU vs observed).
+ * Optional diagonal correction (diagonalDelay): see tick().
  * Random numbers come from a seeded generator (mulberry32), not NumPy's, so
  * runs match Python statistically, not cell for cell.
  * Tested by scripts/verify_port.mjs.
@@ -68,7 +69,7 @@
      * @param {Int32Array|number[]} landcover class 1-8, 0 = water, -999 = no data
      * @param {Float64Array|number[]} ndvi NDVI, -999 = no data (never burns)
      * @param {Float64Array|number[]} slope degrees
-     * @param {{rows:number, cols:number, coeffs?, seed?, residenceTime?, spotting?}} opts
+     * @param {{rows:number, cols:number, coeffs?, seed?, residenceTime?, spotting?, diagonalDelay?}} opts
      */
     constructor(landcover, ndvi, slope, opts) {
       opts = opts || {};
@@ -80,6 +81,7 @@
       this.coeffs = Object.assign({}, DEFAULT_COEFFS, opts.coeffs || {});
       this.residenceTime = opts.residenceTime == null ? 3 : opts.residenceTime | 0;   // steps a cell burns
       this.spotting = !!opts.spotting;                                                 // optional ember spotting
+      this.diagonalDelay = !!opts.diagonalDelay;                                       // optional diagonal correction
       this.reset(opts.seed || 0);
     }
 
@@ -130,7 +132,13 @@
       return arr;
     }
 
-    /** Advance the fire one step. */
+    /**
+     * Advance the fire one step.
+     * Diagonal correction (diagonalDelay): diagonal neighbors are sqrt(2) farther away,
+     * so a cell reaches them one step later (ages 3..residenceTime instead of
+     * 2..residenceTime-1). Without it, fire reaches diagonals as fast as edge neighbors
+     * and burn areas grow as squares.
+     */
     tick(windSpeed, windDir) {
       const g = this.grid, next = Int32Array.from(g);   // read old grid, write new: all cells update at once
       const rows = this.rows, cols = this.cols;
@@ -138,13 +146,15 @@
         for (let col = 1; col < cols - 1; col++) {
           const i = row * cols + col;
           if (g[i] !== BURNING) continue;
-          this.burnAge[i] += 1;
-          if (this.burnAge[i] === 1) continue;          // just ignited: wait one step
-          if (this.burnAge[i] < this.residenceTime) {
+          const age = ++this.burnAge[i];
+          if (age === 1) continue;                      // just ignited: wait one step
+          const burningOut = age >= this.residenceTime;
+          if (!burningOut || this.diagonalDelay) {
             // Try each neighbor, in random order.
             const order = this._shuffle(NEIGHBORHOOD.map((o) => o));
             for (let k = 0; k < order.length; k++) {
               const dRow = order[k][0], dCol = order[k][1];
+              if (this.diagonalDelay && (dRow !== 0 && dCol !== 0 ? age < 3 : burningOut)) continue;
               const ni = (row + dRow) * cols + (col + dCol);
               const s = g[ni];
               if (s !== BURNING && s !== BURNED && s !== EMPTY && s !== NODATA) {
@@ -154,7 +164,7 @@
               }
             }
             // Optional ember spotting: first 11 steps, 1% chance, up to 10 cells away.
-            if (this.spotting && this.stepIdx < 11 && this.rand() < 0.01) {
+            if (this.spotting && !burningOut && this.stepIdx < 11 && this.rand() < 0.01) {
               const oRow = Math.floor(this.rand() * 20) - 10;   // -10..9, like np integers(-10, 10)
               const oCol = Math.floor(this.rand() * 20) - 10;
               const sRow = Math.min(Math.max(row + oRow, 1), rows - 2);
@@ -165,9 +175,8 @@
                 if (fuelFactor(this.landcover[si], -1) > -0.6) next[si] = BURNING;
               }
             }
-          } else {
-            next[i] = BURNED;                           // burned out
           }
+          if (burningOut) next[i] = BURNED;             // burned out
         }
       }
       this.grid = next;
