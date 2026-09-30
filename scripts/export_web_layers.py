@@ -84,7 +84,7 @@ def hillshade(dem, bounds, azimuth=315.0, altitude=45.0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="indir", default="data", help="folder with the tifs")
-    ap.add_argument("--out", default="web/data/layers.json")
+    ap.add_argument("--out", default="webapp/data/layers.json")
     ap.add_argument("--size", type=int, default=160, help="output grid size (square)")
     a = ap.parse_args()
 

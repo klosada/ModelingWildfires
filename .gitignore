@@ -1,7 +1,7 @@
 # --- secrets / tokens ---
 # (commit web/js/config.example.js instead of config.js)
 config.json
-web/js/config.js
+webapp/js/config.js
 
 # --- large downloaded rasters (regenerate via scripts/gee_export.js) ---
 data/*.tif

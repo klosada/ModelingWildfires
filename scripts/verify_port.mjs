@@ -24,7 +24,7 @@ import { dirname, join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const { FireModel, ignitionProbability, highestRiskCell } = require(join(here, "..", "web", "js", "model.js"));
+const { FireModel, ignitionProbability, highestRiskCell } = require(join(here, "..", "webapp", "js", "model.js"));
 
 // --- tiny synthetic landscape (self-contained, no data dependency) --------
 function makeLayers(n, seed) {

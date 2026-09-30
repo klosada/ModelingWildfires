@@ -57,6 +57,7 @@
   .section > .sub { color: var(--ink); font-size: 14px; margin: 0 0 12px; }
   .section > p.sub:has(+ ul.sub) { margin-bottom: 4px; }
   .section > ul.sub { padding-left: 20px; }
+  .section > p.sub.subhead { color: var(--forest); font-weight: 800; }
 
   .demo-body { display: flex; gap: 14px; height: 600px; }
   /* California map: square, same green frame as the sandbox canvas */
@@ -122,7 +123,6 @@
   .iou span, .val-note { color: var(--ink-dim); font-size: 12.5px; }
   .val-note { margin: 4px 0 8px; line-height: 1.45; }
   #ca-validation { margin-top: 16px; }
-  #ca-validation .seg { margin: 2px 0 4px; }
   button.btn:disabled { opacity: .45; cursor: not-allowed; }
   .layerseg button { background: var(--panel); color: var(--ink-dim); border: 1.5px solid var(--line);
                      border-radius: var(--pill); padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
@@ -188,6 +188,12 @@
       <li><em>Cell-level data:</em> Dynamic World land cover, Landsat 9 NDVI, and SRTM elevation with its derived slope were exported from Google Earth Engine and also used as basemaps.</li>
       <li><em>Uniform across all cells:</em> Wind speed and direction from the fire day were pulled from Open-Meteo historical weather data.</li>
     </ul>
+    <p class="sub subhead">Validation</p>
+    <ul class="sub">
+      <li><em>IoU:</em> Cells burned in both the model and the real Rabbit Fire &divide; cells burned in either (1 = perfect match).</li>
+      <li><em>Corrected model:</em> Diagonal cells are about 1.4&times; farther away than side cells, so fire takes one extra step to reach them. This keeps burns from growing in square shapes.</li>
+      <li><em>Stopping point:</em> The model has no firefighting, so each run stops once it has burned to the real fire's extent (8,355 acres).</li>
+    </ul>
     <div class="demo-body">
       <div class="rail">
         <div class="card"><h3>Legend</h3><div class="legend" id="ca-legend"></div></div>
@@ -243,29 +249,24 @@
 
         <!-- validation: live IoU vs the observed Rabbit Fire perimeter -->
         <div id="ca-validation">
+          <h3>Spread model</h3>
+          <div class="layerseg grid2" id="ca-versionSeg">
+            <button data-version="original" aria-pressed="true">Original</button>
+            <button data-version="corrected" aria-pressed="false">Corrected</button>
+          </div>
+
           <h3>Validation</h3>
-          <p class="val-note">Compares the model's burn area with the real Rabbit Fire's burn area.
-            IoU = cells burned in both &divide; cells burned in either (1 = perfect match).</p>
           <div class="iou"><b id="ca-iou">0.00</b><span>IoU</span></div>
           <div class="stats">
             <span>final: original <b id="ca-iou-orig">&ndash;</b></span>
             <span>corrected <b id="ca-iou-corr">&ndash;</b></span>
           </div>
-
-          <div class="seg" id="ca-versionSeg">
-            <button data-version="original" aria-pressed="true">Original</button>
-            <button data-version="corrected" aria-pressed="false">Diagonal-corrected</button>
-          </div>
-          <p class="val-note">Corrected: fire takes one extra step to reach diagonal cells, which are
-            1.41&times; farther away, so burns grow less square.</p>
-
           <div class="layerseg grid2" id="ca-diffSeg">
             <button data-base="difference" aria-pressed="false">Burn Difference</button>
             <button data-base="modeldiff" aria-pressed="false">Model Difference</button>
           </div>
           <p class="val-note" id="ca-diff-note"></p>
 
-          <p class="val-note" id="ca-val-note"></p>
         </div>
       </div>
     </div>
@@ -310,6 +311,12 @@
           <span>burned <b id="s-burned">0</b></span>
         </div>
 
+        <h3>Spread model</h3>
+        <div class="layerseg grid2" id="versionSeg">
+          <button data-version="original" aria-pressed="true">Original</button>
+          <button data-version="corrected" aria-pressed="false">Corrected</button>
+        </div>
+
         <h3>Land cover</h3>
         <div class="row"><label>Vegetation</label><input type="range" id="veg" min="-0.3" max="0.3" step="0.02" value="0"><span class="val" id="veg-v">50</span></div>
         <div class="ends"><span>drought</span><span>lush</span></div>
@@ -347,7 +354,7 @@
   </div>
 
   <!-- ===================== FOOTNOTE ===================== -->
-  <p class="footnote"><em>Known limitation:</em> In this cellular automata model, fire spreads to each cell's 8 neighbors, so burned areas tend to grow in a square shape rather than the irregular outlines of real wildfires. The <em>Diagonal-corrected</em> version in the California Validation panel reduces this by delaying spread to diagonal cells, which are 1.41&times; farther away.</p>
+  <p class="footnote"><em>Known limitation:</em> In this cellular automata model, fire spreads to each cell's 8 neighbors, so burned areas tend to grow in a square shape rather than the irregular outlines of real wildfires. The diagonal-corrected model reduces this inaccuracy by delaying fire spread to diagonal cells.</p>
 </div>
 
 <script src="js/model.js?v=5"></script>   <!-- bump v when model.js changes (avoids a stale cached copy) -->
@@ -536,8 +543,8 @@
   //   difference: live model vs real fire; modeldiff: corrected vs original final burns.
   var DIFF = {
     difference: { colors: {1: [46, 160, 90], 2: [236, 120, 40], 3: [60, 110, 205]},
-                  names: {1: "Match", 2: "Over-predicted (model only)", 3: "Missed (real fire only)"} },
-    modeldiff:  { colors: {1: [120, 110, 100], 3: [150, 80, 190], 2: [30, 165, 175]},
+                  names: {1: "Match", 2: "Over-predicted", 3: "Missed"} },
+    modeldiff:  { colors: {1: [46, 160, 90], 2: [236, 120, 40], 3: [60, 110, 205]},   // same colors as difference
                   names: {1: "Both versions", 3: "Original only", 2: "Corrected only"} },
   };
   // Slope: white (flat) -> teal -> blue (steep)
@@ -564,6 +571,7 @@
     base: "landcover", hill: true, playing: false, windSpd: 8, windDir: 90,
     coeffs: {P0: 0.58, C1: 0.045, C2: 0.131, A: 0.078},   // calibrated, fixed
     layers: null, model: null, hover: -1,
+    diagonalDelay: false,                                 // model version: original / diagonal-corrected
   };
   var canvas = document.getElementById("cv");
   var renderer = new Renderer(canvas);
@@ -583,6 +591,7 @@
     var L = sandbox.layers;
     sandbox.model = new FireModel(L.landcover, L.ndvi, L.slope, {
       rows: L.size, cols: L.size, seed: sandbox.seed, coeffs: sandbox.coeffs, residenceTime: 4,
+      diagonalDelay: sandbox.diagonalDelay,
     });
     // Fire starts at the highest-risk cell (ignition model), kept 10% in from the border.
     var ig = M.highestRiskCell(L.landcover, L.ndvi, L.slope, L.size, L.size, Math.round(L.size * 0.1));
@@ -688,6 +697,12 @@
   document.getElementById("playBtn").onclick = function () { setPlay(!sandbox.playing); };
   document.getElementById("stepBtn").onclick = function () { setPlay(false); tickOnce(); };
   document.getElementById("resetBtn").onclick = function () { rebuildModel(); };
+  document.getElementById("versionSeg").addEventListener("click", function (e) {
+    var btn = e.target.closest("button"); if (!btn) return;
+    [].forEach.call(this.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", "false"); });
+    btn.setAttribute("aria-pressed", "true");
+    sandbox.diagonalDelay = btn.dataset.version === "corrected"; rebuildModel();
+  });
   document.getElementById("regenBtn").onclick = randomizeEnvironment;
 
   var fmtVeg = function (v) { return Math.round((v + 0.3) / 0.6 * 100); };
@@ -818,7 +833,6 @@
       });
       // Add overlay once the map style loads.
       ca.map.on("style.load", caAddOverlay);
-      ca.map.on("click", function (e) { caIgnite(e.lngLat.lat, e.lngLat.lng); });
       ca.map.on("mousemove", caHoverAt);
       ca.map.on("mouseout", function () { ca.hover = -1; caInspect(); });
       requestAnimationFrame(caLoop);
@@ -844,10 +858,6 @@
     }
     caRender();
   }
-
-  var CA_STOP_NOTE = "The model has no firefighting, so the fire would keep spreading until it ran out of " +
-    "fuel or reached the map edge. Play stops once the model has burned the same area as the real fire " +
-    "(8,355 acres), so the IoU measures where it burned, not how long it ran.";
 
   // New model at the Rabbit Fire ignition point (seed 0, current version).
   function caNewModel(diagonalDelay) {
@@ -886,7 +896,6 @@
     var L = ca.layers;
     ca.model = caNewModel(ca.diagonalDelay);
     ca.autoStopped = false;
-    document.getElementById("ca-val-note").textContent = CA_STOP_NOTE;
     document.getElementById("ca-validation").style.display = L.observed ? "" : "none";
     caSetPlay(false);
     caRender(); caStats();
@@ -922,8 +931,6 @@
     document.getElementById("ca-iou").textContent = v.iou.toFixed(2);
     if (!ca.autoStopped && caReachedRealArea(v)) {
       ca.autoStopped = true; caSetPlay(false);
-      document.getElementById("ca-val-note").textContent = "Stopped at step " + ca.model.stepIdx +
-        ": the model has burned the same area as the real fire. Press Reset to run it again.";
     }
   }
   function caTick() {
@@ -945,10 +952,6 @@
     document.getElementById("ca-playBtn").disabled = document.getElementById("ca-stepBtn").disabled = !!ca.autoStopped;
   }
 
-  function caIgnite(lat, lon) {
-    var c = caCell(lat, lon); if (!c) return;
-    ca.model.ignite(c[0], c[1]); caRender(); caStats();
-  }
   function caHoverAt(e) {
     var c = caCell(e.lngLat.lat, e.lngLat.lng);
     ca.hover = c ? c[0] * ca.layers.size + c[1] : -1;
@@ -1023,8 +1026,8 @@
   })();
   // Map layer: one choice across the Map layer and Validation buttons.
   var CA_DIFF_NOTES = {
-    difference: "Current run vs the real fire.",
-    modeldiff: "Original vs corrected final burns. Both stop at the real fire's area, so this shows only the change in shape.",
+    difference: "Current model vs the real fire.",
+    modeldiff: "Original vs corrected model burns.",
   };
   ["ca-baseSeg", "ca-diffSeg"].forEach(function (id) {
     document.getElementById(id).addEventListener("click", function (e) {
