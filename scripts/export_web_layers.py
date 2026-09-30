@@ -4,7 +4,8 @@ Reads landuse.tif / NDVI.tif / SlopeExport.tif / DEM.tif (exported aligned by
 scripts/gee_export.js), resamples them onto a common size x size grid, derives
 hillshade from the DEM, applies the notebook's NDVI nodata masking, and writes
 web/data/layers.json for the California dashboard: grid size, bounds, per-cell
-arrays, model coefficients, land-cover classes, and the ignition point.
+arrays, model coefficients, land-cover classes, the ignition point, and the
+observed burn perimeter as grid cells (for validation).
 
 Usage:
     python scripts/export_web_layers.py --in data --out web/data/layers.json --size 160
@@ -24,6 +25,8 @@ import numpy as np
 try:
     import rasterio
     from rasterio.enums import Resampling
+    from rasterio.features import rasterize
+    from rasterio.transform import from_bounds
     from rasterio.warp import transform_bounds
 except ImportError:
     sys.exit("rasterio is required: pip install rasterio  (see requirements.txt)")
@@ -132,6 +135,18 @@ def main():
     }
     if elev is not None:
         payload["elev"] = np.round(elev, 1).flatten().tolist()
+
+    # Observed burn perimeter -> grid cells (1 = burned), for validation.
+    perim_path = p("Rabbit_fire_perimeter.geojson")
+    if os.path.exists(perim_path):
+        with open(perim_path) as f:
+            perim = json.load(f)
+        shapes = [(feat["geometry"], 1) for feat in perim["features"]]
+        observed = rasterize(shapes, out_shape=(n, n), transform=from_bounds(*bounds, n, n),
+                             fill=0, dtype="uint8")
+        payload["observed"] = observed.flatten().tolist()
+    else:
+        print("note: Rabbit_fire_perimeter.geojson not found -- validation layer omitted")
 
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     with open(a.out, "w") as f:

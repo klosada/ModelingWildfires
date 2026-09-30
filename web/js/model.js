@@ -2,7 +2,7 @@
  * Wildfire spread model: JavaScript copy of scripts/firemodel.py.
  *
  * Same rules, line for line, so the model runs in the browser.
- * Also includes the simplified ignition model (picks the starting cell).
+ * Also includes the simplified ignition model and validation (IoU vs observed).
  * Random numbers come from a seeded generator (mulberry32), not NumPy's, so
  * runs match Python statistically, not cell for cell.
  * Tested by scripts/verify_port.mjs.
@@ -242,8 +242,33 @@
     return best;
   }
 
+  // --- Validation: compare a run to the observed burn perimeter ---
+  // IoU = match / (match + over-predicted + missed); 1 = perfect overlap, 0 = none.
+  const NEITHER = 0, MATCH = 1, OVER = 2, MISSED = 3;   // difference-map classes
+
+  /** Difference-map class for one cell (model state vs observed 0/1). */
+  function diffClass(state, observed) {
+    const model = state === BURNING || state === BURNED;
+    if (model && observed) return MATCH;
+    if (model) return OVER;
+    if (observed) return MISSED;
+    return NEITHER;
+  }
+
+  /** Cell counts per class + IoU. */
+  function compareToObserved(grid, observed) {
+    let match = 0, over = 0, missed = 0;
+    for (let i = 0; i < grid.length; i++) {
+      const k = diffClass(grid[i], observed[i]);
+      if (k === MATCH) match++; else if (k === OVER) over++; else if (k === MISSED) missed++;
+    }
+    const union = match + over + missed;
+    return { match, over, missed, iou: union ? match / union : 0 };
+  }
+
   return {
     FireModel, mulberry32, ignitionProbability, highestRiskCell,
+    diffClass, compareToObserved, NEITHER, MATCH, OVER, MISSED,
     EMPTY, BURNING, BURNED, NODATA,
     NEIGHBORHOOD, FUEL_TO_FACTOR, DEFAULT_COEFFS, fuelFactor,
   };

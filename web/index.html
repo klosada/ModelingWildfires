@@ -116,6 +116,13 @@
   /* Map layer toggle; .grid2 = 2x2 (California) */
   .layerseg { display: flex; flex-wrap: wrap; gap: 6px; }
   .layerseg.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+  .layerseg .wide { grid-column: 1 / -1; }
+  /* validation block */
+  .iou { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 2px; }
+  .iou b { color: var(--forest); font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .iou span, .val-note { color: var(--ink-dim); font-size: 12.5px; }
+  .val-note { margin: 4px 0 0; }
+  #ca-validation { margin-top: 16px; }
   .layerseg button { background: var(--panel); color: var(--ink-dim); border: 1.5px solid var(--line);
                      border-radius: var(--pill); padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
   .layerseg button[aria-pressed="true"] { background: var(--green); color: #fff; border-color: var(--green); }
@@ -215,6 +222,7 @@
           <button data-base="landcover" aria-pressed="false">Land cover</button>
           <button data-base="ndvi" aria-pressed="false">NDVI</button>
           <button data-base="slope" aria-pressed="false">Slope</button>
+          <button data-base="difference" aria-pressed="false" class="wide">Difference (model vs real fire)</button>
         </div>
         <div class="row"><label>Opacity</label><input type="range" id="ca-opacity" min="0" max="100" step="5" value="85"><span class="val" id="ca-opacity-v">85%</span></div>
 
@@ -231,6 +239,17 @@
               <polygon points="29,4 25,12 33,12" fill="#1b5e3f"/></g>
           </svg>
           <div><span style="font-weight:800; color:var(--ink); font-size:15px">4 m/s</span><span style="color:var(--ink-dim); font-size:13px"> toward 110°</span></div>
+        </div>
+
+        <!-- validation: live IoU vs the observed Rabbit Fire perimeter -->
+        <div id="ca-validation">
+          <h3>Validation</h3>
+          <div class="iou"><b id="ca-iou">0.00</b><span>IoU (1 = perfect match)</span></div>
+          <div class="stats">
+            <span>best <b id="ca-iou-best">0.00</b> at step <b id="ca-iou-step">0</b></span>
+            <span>burned area <b id="ca-area">0%</b> of real fire</span>
+          </div>
+          <p class="val-note" id="ca-val-note">Play stops when the model has burned the same area as the real fire.</p>
         </div>
       </div>
     </div>
@@ -315,7 +334,7 @@
   <p class="footnote"><em>Known limitation:</em> In this cellular automata model, fire spreads to each cell's 8 neighbors, so burned areas tend to grow in a square shape rather than the irregular outlines of real wildfires.</p>
 </div>
 
-<script src="js/model.js?v=3"></script>   <!-- bump v when model.js changes (avoids a stale cached copy) -->
+<script src="js/model.js?v=4"></script>   <!-- bump v when model.js changes (avoids a stale cached copy) -->
 <script>
 (function () {
   "use strict";
@@ -443,9 +462,14 @@
   Renderer.prototype.draw = function (model, layers, base, hillOn) {
     var n = this.n, d = this.img.data, hs = layers.hillshade;
     var grid = model.grid, age = model.burnAge, res = model.residenceTime;
+    var diffMode = base === "difference" && layers.observed;
     for (var i = 0; i < n * n; i++) {
       var s = grid[i], r, g, b, a = 255;
-      if (s === BURNING) {
+      if (diffMode) {
+        // Difference map: match / over-predicted / missed; other cells transparent.
+        var dc = DIFF_COLORS[M.diffClass(s, layers.observed[i])];
+        if (dc) { r = dc[0]; g = dc[1]; b = dc[2]; } else { r = 0; g = 0; b = 0; a = 0; }
+      } else if (s === BURNING) {
         var t = res > 2 ? Math.min((age[i] - 1) / (res - 1), 1) : 0;
         r = 255; g = Math.round(200 - 150 * t); b = Math.round(40 - 30 * t);
       } else if (s === BURNED) {
@@ -466,7 +490,7 @@
     cx.globalCompositeOperation = "lighter";
     var S = this.SCALE, rad = S * 2.6;
     for (var j = 0; j < n * n; j++) {
-      if (grid[j] !== BURNING) continue;
+      if (diffMode || grid[j] !== BURNING) continue;   // glow on burning cells (not in difference mode)
       var gx = (j % n) * S + S / 2, gy = ((j / n) | 0) * S + S / 2;
       var grd = cx.createRadialGradient(gx, gy, 0, gx, gy, rad);
       grd.addColorStop(0, "rgba(255,150,40,0.55)"); grd.addColorStop(1, "rgba(255,80,0,0)");
@@ -491,6 +515,9 @@
   // NDVI: red (low) -> yellow -> green (dense vegetation)
   var NDVI_STOPS = [[-0.1, [165, 0, 38]], [0.1, [215, 48, 39]], [0.25, [253, 174, 97]],
                     [0.4, [254, 224, 139]], [0.55, [166, 217, 106]], [0.7, [102, 189, 99]], [0.85, [26, 152, 80]]];
+  // Difference map colors (index = M.MATCH / M.OVER / M.MISSED).
+  var DIFF_COLORS = {1: [46, 160, 90], 2: [236, 120, 40], 3: [60, 110, 205]};
+  var DIFF_NAMES = {1: "Match", 2: "Over-predicted", 3: "Missed"};
   // Slope: white (flat) -> teal -> blue (steep)
   var SLOPE_STOPS = [[0, [255, 255, 255]], [12, [199, 233, 237]], [25, [65, 182, 196]], [40, [34, 94, 168]]];
 
@@ -752,6 +779,7 @@
         slope: Float64Array.from(d.slope),
         hillshade: Float64Array.from(d.hillshade),
         elev: d.elev ? Float64Array.from(d.elev) : null,
+        observed: d.observed ? Uint8Array.from(d.observed) : null,   // real burn perimeter (0/1)
       };
       ca.renderer.resize(d.size);
       // Model canvas: Mapbox draws it as an overlay; kept off-screen.
@@ -801,6 +829,9 @@
     });
     var ig = caCell(33.89148, -117.02139);   // Rabbit Fire ignition point
     if (ig) ca.model.ignite(ig[0], ig[1]);
+    ca.best = {iou: 0, step: 0}; ca.autoStopped = false;
+    document.getElementById("ca-val-note").textContent = "Play stops when the model has burned the same area as the real fire.";
+    document.getElementById("ca-validation").style.display = L.observed ? "" : "none";
     ca.playing = false; caSetPlay(false);
     caRender(); caStats();
   }
@@ -817,7 +848,7 @@
   function caRender() {
     if (!ca.layers) return;
     // Satellite: draw fire only; otherwise draw the chosen data layer.
-    var b = ca.base === "satellite" ? null : ca.base;   // "landcover" | "ndvi" | "slope"
+    var b = ca.base === "satellite" ? null : ca.base;   // "landcover" | "ndvi" | "slope" | "difference"
     ca.renderer.draw(ca.model, ca.layers, b, ca.hill);
   }
   function caStats() {
@@ -825,6 +856,24 @@
     document.getElementById("ca-s-step").textContent = s.step;
     document.getElementById("ca-s-burning").textContent = s.burning;
     document.getElementById("ca-s-burned").textContent = s.burned;
+    caValidate();
+  }
+  // Live IoU vs the real perimeter; track best step; auto-pause at the observed burn area.
+  function caValidate() {
+    var obs = ca.layers.observed;
+    if (!obs) return;
+    var v = M.compareToObserved(ca.model.grid, obs), step = ca.model.stepIdx;
+    var modelArea = v.match + v.over, realArea = v.match + v.missed;
+    if (v.iou > ca.best.iou) ca.best = {iou: v.iou, step: step};
+    document.getElementById("ca-iou").textContent = v.iou.toFixed(2);
+    document.getElementById("ca-iou-best").textContent = ca.best.iou.toFixed(2);
+    document.getElementById("ca-iou-step").textContent = ca.best.step;
+    document.getElementById("ca-area").textContent = Math.round(100 * modelArea / realArea) + "%";
+    if (ca.playing && !ca.autoStopped && modelArea >= realArea) {
+      ca.autoStopped = true; caSetPlay(false);
+      document.getElementById("ca-val-note").textContent =
+        "Stopped at step " + step + ": model burned area matches the real fire. Press Play to keep going.";
+    }
   }
   function caTick() {
     ca.model.tick(ca.windSpd, modelWindDir(ca.windDir));
@@ -876,18 +925,22 @@
       ln("Slope", L.slope[i].toFixed(1) + "°") +
       ln("Wind", ca.windSpd + " m/s, " + ca.windDir + "°") +
       ln("State", stName) +
+      (L.observed ? ln("Real fire", L.observed[i] ? "Burned" : "Not burned") : "") +
       '<div class="prob">Chance of spreading: ' + level + '</div>';
   }
+  // Legend: land-cover classes + fire states, or difference classes in difference mode.
   function caBuildLegend() {
-    var present = {}, L = ca.layers;
-    for (var i = 0; i < L.landcover.length; i++) present[L.landcover[i]] = true;
-    var html = "";
-    Object.keys(LC).forEach(function (k) {
-      if (!present[k]) return; var c = LC[k];
-      html += '<div class="li"><span class="sw" style="background:rgb(' + c.rgb.join(",") + ')"></span>' + c.name + '</div>';
-    });
-    html += '<div class="li"><span class="sw" style="background:#ff8c1a"></span>Burning</div>';
-    html += '<div class="li"><span class="sw" style="background:#2a1a12"></span>Burned</div>';
+    var present = {}, L = ca.layers, html = "";
+    function item(rgb, name) { return '<div class="li"><span class="sw" style="background:' + rgb + '"></span>' + name + '</div>'; }
+    if (ca.base === "difference") {
+      [1, 2, 3].forEach(function (k) { html += item("rgb(" + DIFF_COLORS[k].join(",") + ")", DIFF_NAMES[k]); });
+    } else {
+      for (var i = 0; i < L.landcover.length; i++) present[L.landcover[i]] = true;
+      Object.keys(LC).forEach(function (k) {
+        if (present[k]) html += item("rgb(" + LC[k].rgb.join(",") + ")", LC[k].name);
+      });
+      html += item("#ff8c1a", "Burning") + item("#2a1a12", "Burned");
+    }
     document.getElementById("ca-legend").innerHTML = html;
   }
   function caUpdateWindArrow() {
@@ -915,7 +968,7 @@
   document.getElementById("ca-baseSeg").addEventListener("click", function (e) {
     var btn = e.target.closest("button"); if (!btn) return;
     [].forEach.call(this.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", "false"); });
-    btn.setAttribute("aria-pressed", "true"); ca.base = btn.dataset.base; caRender();
+    btn.setAttribute("aria-pressed", "true"); ca.base = btn.dataset.base; caRender(); caBuildLegend();
   });
 
   // Load the map only when the California section scrolls into view.

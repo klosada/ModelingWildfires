@@ -6,7 +6,7 @@ Each step, every burning cell tries to ignite its 8 neighbors with probability
 
 (Alexandridis et al. 2008; terms defined in the README).
 Per-cell inputs: land cover, NDVI, slope. Wind is uniform across the grid.
-Also includes a simplified ignition model to pick the starting cell.
+Also includes a simplified ignition model and validation (IoU vs observed).
 
 Ported unchanged from notebooks/ActualCA.ipynb (the validated model).
 web/js/model.js is a line-for-line JavaScript copy for the browser.
@@ -205,6 +205,33 @@ def highest_risk_cell(landcover, ndvi, slope, margin=1):
         return None
     row, col = np.unravel_index(np.nanargmax(p), p.shape)
     return int(row), int(col)
+
+
+# -----------------------------------------------------------------------------
+# Validation: compare a run to the observed burn perimeter.
+# IoU = match / (match + over-predicted + missed); 1 = perfect overlap, 0 = none.
+# -----------------------------------------------------------------------------
+NEITHER, MATCH, OVER, MISSED = 0, 1, 2, 3   # difference-map classes
+
+
+def difference_map(grid, observed):
+    """Per-cell class: MATCH (both burned), OVER (model only), MISSED (observed only)."""
+    model = np.isin(grid, (BURNING, BURNED))
+    obs = np.asarray(observed).astype(bool)
+    diff = np.full(model.shape, NEITHER, dtype=np.int64)
+    diff[model & obs] = MATCH
+    diff[model & ~obs] = OVER
+    diff[~model & obs] = MISSED
+    return diff
+
+
+def compare_to_observed(grid, observed):
+    """Cell counts per class + IoU."""
+    diff = difference_map(grid, observed)
+    match, over, missed = (int(np.count_nonzero(diff == k)) for k in (MATCH, OVER, MISSED))
+    union = match + over + missed
+    return {"match": match, "over": over, "missed": missed,
+            "iou": match / union if union else 0.0}
 
 
 # -----------------------------------------------------------------------------
