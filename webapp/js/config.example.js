@@ -1,5 +1,5 @@
 /*
- * Copy this file to  web/js/config.js  and paste your Mapbox public token.
+ * Copy this file to  webapp/js/config.js  and paste your Mapbox public token.
  * config.js is gitignored so your token never gets committed.
  *
  * Get a token at https://account.mapbox.com/access-tokens/ (starts with "pk.").

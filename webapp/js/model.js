@@ -197,7 +197,8 @@
 
 
   // --- Ignition model (simplified): where a fire is most likely to start ---
-  // Logistic weighted overlay from notebooks/Experimentation_validation.ipynb,
+  // Logistic weighted overlay from the course notebook
+  // archive/course-project/notebooks/Experimentation_validation.ipynb,
   // using the 3 layers available here at their original weights.
   const IGNITION_WEIGHTS = { veg: 0.25, slope: 0.15, landUse: 0.15 };
 

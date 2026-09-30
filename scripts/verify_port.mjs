@@ -1,5 +1,5 @@
 /*
- * Verifies the JS FireModel port (web/js/model.js).
+ * Verifies the JS FireModel port (webapp/js/model.js).
  *
  *   1. Determinism   -- identical seed => identical output.
  *   2. Divergence    -- different seeds => different output.

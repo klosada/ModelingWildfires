@@ -2,13 +2,13 @@
 
 Reads landuse.tif / NDVI.tif / SlopeExport.tif / DEM.tif (exported aligned by
 scripts/gee_export.js), resamples them onto a common size x size grid, derives
-hillshade from the DEM, applies the notebook's NDVI nodata masking, and writes
-web/data/layers.json for the California dashboard: grid size, bounds, per-cell
-arrays, model coefficients, land-cover classes, the ignition point, and the
-observed burn perimeter as grid cells (for validation).
+hillshade from the DEM, applies the course notebook's NDVI nodata masking, and
+writes webapp/data/layers.json for the California dashboard: grid size, bounds,
+per-cell arrays, model coefficients, land-cover classes, the ignition point, and
+the observed burn perimeter as grid cells (for validation).
 
 Usage:
-    python scripts/export_web_layers.py --in data --out web/data/layers.json --size 160
+    python scripts/export_web_layers.py --in data --out webapp/data/layers.json --size 160
 
 Requires rasterio + numpy (see requirements.txt).
 """
@@ -35,7 +35,7 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from firemodel import FUEL_TO_FACTOR, DEFAULT_COEFFS  # noqa: E402
 
-# Land-cover names + map colors (keep in sync with LC in web/index.html).
+# Land-cover names + map colors (keep in sync with LC in webapp/index.html).
 LC_META = {
     0: ("Water",     [58, 86, 120]),
     1: ("Trees",     [64, 96, 72]),
@@ -104,7 +104,7 @@ def main():
     if lc_nodata is not None:
         lc_int = np.where(lc == lc_nodata, -999, lc_int)
 
-    # Invalid NDVI (outside [-1, 1] or NaN) -> -999, as in the notebook.
+    # Invalid NDVI (outside [-1, 1] or NaN) -> -999, as in the course notebook.
     ndvi = np.where(np.isnan(ndvi) | (ndvi < -1) | (ndvi > 1), -999.0, ndvi)
     slope = np.where(np.isnan(slope), 0.0, slope)
 

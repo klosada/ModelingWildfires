@@ -1,5 +1,5 @@
 # --- secrets / tokens ---
-# (commit web/js/config.example.js instead of config.js)
+# (commit webapp/js/config.example.js instead of config.js)
 config.json
 webapp/js/config.js
 
@@ -8,7 +8,7 @@ data/*.tif
 data/*.tiff
 *.tif
 *.tiff
-# web/data/layers.json IS committed on purpose — the demo fetches it at runtime.
+# webapp/data/layers.json IS committed on purpose — the demo fetches it at runtime.
 
 # --- python ---
 __pycache__/

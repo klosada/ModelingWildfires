@@ -9,8 +9,8 @@ Per-cell inputs: land cover, NDVI, slope. Wind is uniform across the grid.
 Also includes a simplified ignition model and validation (IoU vs observed).
 Optional diagonal correction (diagonal_delay): see FireModel.tick.
 
-Ported unchanged from notebooks/ActualCA.ipynb (the validated model).
-web/js/model.js is a line-for-line JavaScript copy for the browser.
+Ported from the course notebook archive/course-project/notebooks/ActualCA.ipynb.
+webapp/js/model.js is a line-for-line JavaScript copy for the browser.
 """
 
 from __future__ import annotations
@@ -168,7 +168,8 @@ class FireModel:
 
 # -----------------------------------------------------------------------------
 # Ignition model (simplified): where a fire is most likely to start.
-# Logistic weighted overlay from notebooks/Experimentation_validation.ipynb,
+# Logistic weighted overlay from the course notebook
+# archive/course-project/notebooks/Experimentation_validation.ipynb,
 # using the 3 layers available here at their original weights
 # (the full model also uses roads, temperature, dryness, lightning, fire history).
 # -----------------------------------------------------------------------------
