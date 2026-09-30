@@ -7,6 +7,11 @@ writes webapp/data/layers.json for the California dashboard: grid size, bounds,
 per-cell arrays, model coefficients, land-cover classes, the ignition point, and
 the observed burn perimeter as grid cells (for validation).
 
+If the Sentinel-2 exports from scripts/gee_burn_scar.js are present, it also adds
+real-fire layers: burn severity per cell (dNBR classes inside the perimeter,
+unburned outside) plus web images of burn severity, pre-fire imagery, and the
+Jul 17 during-fire imagery (written next to layers.json).
+
 Usage:
     python scripts/export_web_layers.py --in data --out webapp/data/layers.json --size 160
 
@@ -24,12 +29,13 @@ import numpy as np
 
 try:
     import rasterio
+    from PIL import Image
     from rasterio.enums import Resampling
     from rasterio.features import rasterize
     from rasterio.transform import from_bounds
     from rasterio.warp import transform_bounds
 except ImportError:
-    sys.exit("rasterio is required: pip install rasterio  (see requirements.txt)")
+    sys.exit("rasterio + Pillow are required: pip install -r requirements.txt")
 
 # Single source of truth for fuel factors + coefficients.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,6 +54,23 @@ LC_META = {
     8: ("Snow/Ice",  [220, 224, 232]),
 }
 
+# Burn severity from dNBR: USGS thresholds (Key & Benson 2006), with the
+# moderate-low and moderate-high classes merged. Keep in sync with webapp/index.html.
+SEVERITY_BREAKS = (0.10, 0.27, 0.66)
+SEVERITY_META = {
+    0: ("Unburned", [26, 152, 80]),
+    1: ("Low",      [254, 224, 139]),
+    2: ("Moderate", [244, 109, 67]),
+    3: ("High",     [165, 0, 38]),
+}
+
+# Sentinel-2 true-color exports -> web images (layer key, tif, output file).
+IMAGERY = [
+    ("prefire", "S2_prefire_truecolor.tif", "prefire.jpg"),
+    ("fire_20230717", "S2_during_20230717_truecolor.tif", "fire_20230717.jpg"),
+]
+IMAGE_WIDTH = 1280   # px; plenty for the map, keeps each image small
+
 # Ignition point (lat, lon).
 IGNITION_POINTS = [
     {"name": "Rabbit Fire", "lat": 33.89148, "lon": -117.02139},
@@ -62,6 +85,44 @@ def read_resampled(path, size, method):
         west, south, east, north = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
         nodata = src.nodata
     return arr, (west, south, east, north), nodata
+
+
+def bounds_dict(b):
+    return {"west": b[0], "south": b[1], "east": b[2], "north": b[3]}
+
+
+def perimeter_mask(shapes, bounds, width, height):
+    """Perimeter polygons -> 0/1 grid of the given size over the given bounds."""
+    return rasterize(shapes, out_shape=(height, width), transform=from_bounds(*bounds, width, height),
+                     fill=0, dtype="uint8")
+
+
+def classify_severity(dnbr, inside):
+    """dNBR -> severity class 0-3, kept only inside the perimeter (outside = unburned)."""
+    classes = np.digitize(np.nan_to_num(dnbr, nan=0.0), SEVERITY_BREAKS)
+    return np.where(inside == 1, classes, 0).astype("uint8")
+
+
+def write_severity_image(dnbr_path, shapes, out_path):
+    """Full-detail burn severity map (inside the perimeter) as a PNG; returns its bounds."""
+    with rasterio.open(dnbr_path) as src:
+        h = round(IMAGE_WIDTH * src.height / src.width)
+        dnbr = src.read(1, out_shape=(h, IMAGE_WIDTH), resampling=Resampling.average)
+        b = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+    sev = classify_severity(dnbr, perimeter_mask(shapes, b, IMAGE_WIDTH, h))
+    palette = np.array([SEVERITY_META[k][1] for k in sorted(SEVERITY_META)], dtype="uint8")
+    Image.fromarray(palette[sev]).save(out_path, optimize=True)
+    return b
+
+
+def write_true_color_image(tif_path, out_path):
+    """3-band true-color GeoTIFF -> JPEG for the web; returns its bounds."""
+    with rasterio.open(tif_path) as src:
+        h = round(IMAGE_WIDTH * src.height / src.width)
+        rgb = src.read([1, 2, 3], out_shape=(3, h, IMAGE_WIDTH), resampling=Resampling.average)
+        b = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
+    Image.fromarray(np.transpose(rgb, (1, 2, 0)).astype("uint8")).save(out_path, quality=85, optimize=True)
+    return b
 
 
 def hillshade(dem, bounds, azimuth=315.0, altitude=45.0):
@@ -123,7 +184,7 @@ def main():
     ndvi_r = np.where(ndvi <= -999, -999, np.round(ndvi, 3))
     payload = {
         "size": n,
-        "bounds": {"west": bounds[0], "south": bounds[1], "east": bounds[2], "north": bounds[3]},
+        "bounds": bounds_dict(bounds),
         "landcover": lc_int.flatten().tolist(),
         "ndvi": ndvi_r.flatten().tolist(),
         "slope": np.round(slope, 2).flatten().tolist(),
@@ -142,13 +203,33 @@ def main():
         with open(perim_path) as f:
             perim = json.load(f)
         shapes = [(feat["geometry"], 1) for feat in perim["features"]]
-        observed = rasterize(shapes, out_shape=(n, n), transform=from_bounds(*bounds, n, n),
-                             fill=0, dtype="uint8")
+        observed = perimeter_mask(shapes, bounds, n, n)
         payload["observed"] = observed.flatten().tolist()
     else:
+        shapes = None
         print("note: Rabbit_fire_perimeter.geojson not found -- validation layer omitted")
 
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+    # Real-fire layers from the Sentinel-2 exports (scripts/gee_burn_scar.js), optional.
+    outdir = os.path.dirname(a.out) or "."
+    os.makedirs(outdir, exist_ok=True)
+    imagery = {}
+    if shapes and os.path.exists(p("dNBR.tif")):
+        dnbr, _, _ = read_resampled(p("dNBR.tif"), n, Resampling.average)
+        payload["severity"] = classify_severity(dnbr, observed).flatten().tolist()
+        payload["severity_classes"] = {str(k): {"name": nm, "color": col} for k, (nm, col) in SEVERITY_META.items()}
+        b = write_severity_image(p("dNBR.tif"), shapes, os.path.join(outdir, "severity.png"))
+        imagery["severity"] = {"url": "data/severity.png", "bounds": bounds_dict(b)}
+    else:
+        print("note: dNBR.tif (or the perimeter) not found -- burn severity omitted")
+    for key, tif, out_name in IMAGERY:
+        if os.path.exists(p(tif)):
+            b = write_true_color_image(p(tif), os.path.join(outdir, out_name))
+            imagery[key] = {"url": "data/" + out_name, "bounds": bounds_dict(b)}
+        else:
+            print(f"note: {tif} not found -- {key} imagery omitted")
+    if imagery:
+        payload["imagery"] = imagery
+
     with open(a.out, "w") as f:
         json.dump(payload, f, separators=(",", ":"))
 
@@ -164,6 +245,13 @@ def main():
     for v, c in sorted(zip(vals, counts), key=lambda t: -t[1]):
         nm = "nodata" if v == -999 else LC_META.get(int(v), ("?", None))[0]
         print(f"  {int(v):>4}  {nm:<9} {c:>7}  {100*c/(n*n):5.1f}%")
+    if "severity" in payload:
+        sev = np.array(payload["severity"])
+        print("burn severity (cells inside the perimeter): " + ", ".join(
+            f"{SEVERITY_META[k][0]} {np.count_nonzero((sev == k) & (observed.flatten() == 1))}" for k in SEVERITY_META))
+    for key, v in imagery.items():
+        kb_img = os.path.getsize(os.path.join(outdir, os.path.basename(v["url"]))) / 1024.0
+        print(f"image {v['url']}  ({kb_img:.0f} KB)")
 
 
 if __name__ == "__main__":

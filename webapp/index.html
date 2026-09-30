@@ -185,7 +185,7 @@
     <h2>California Study Area</h2>
     <p class="sub">Reconstructs the Rabbit Fire that ignited on July 14, 2023 in Riverside County, California, using real environmental data.</p>
     <ul class="sub">
-      <li><em>Cell-level data:</em> Dynamic World land cover, Landsat 9 NDVI, and SRTM elevation with its derived slope were exported from Google Earth Engine and also used as basemaps.</li>
+      <li><em>Cell-level data:</em> Dynamic World land cover, Sentinel-2 NDVI, and SRTM elevation with its derived slope were exported from Google Earth Engine and also used as basemaps.</li>
       <li><em>Uniform across all cells:</em> Wind speed and direction from the fire day were pulled from Open-Meteo historical weather data.</li>
     </ul>
     <p class="sub subhead">Validation</p>
@@ -264,6 +264,9 @@
           <div class="layerseg grid2" id="ca-diffSeg">
             <button data-base="difference" aria-pressed="false">Burn Difference</button>
             <button data-base="modeldiff" aria-pressed="false">Model Difference</button>
+            <button data-base="severity" aria-pressed="false">Burn Severity</button>
+            <button data-base="prefire" aria-pressed="false">Pre-Fire Imagery</button>
+            <button data-base="fire_20230717" aria-pressed="false">Jul 17 Fire Imagery</button>
           </div>
           <p class="val-note" id="ca-diff-note"></p>
 
@@ -818,6 +821,9 @@
         hillshade: Float64Array.from(d.hillshade),
         elev: d.elev ? Float64Array.from(d.elev) : null,
         observed: d.observed ? Uint8Array.from(d.observed) : null,   // real burn perimeter (0/1)
+        severity: d.severity ? Uint8Array.from(d.severity) : null,   // real burn severity class (0-3)
+        severityClasses: d.severity_classes || null,
+        imagery: d.imagery || {},                                     // Sentinel-2 web images + bounds
       };
       ca.renderer.resize(d.size);
       // Model canvas: Mapbox draws it as an overlay; kept off-screen.
@@ -856,6 +862,18 @@
         paint: { "raster-opacity": ca.opacity, "raster-resampling": "nearest", "raster-fade-duration": 0 },
       });
     }
+    // Real-fire images (burn severity, Sentinel-2 imagery), hidden until chosen; below the model fire.
+    Object.keys(ca.layers.imagery).forEach(function (key) {
+      var im = ca.layers.imagery[key], ib = im.bounds, id = "ca-img-" + key;
+      if (!ca.map.getSource(id)) {
+        ca.map.addSource(id, { type: "image", url: im.url,
+          coordinates: [[ib.west, ib.north], [ib.east, ib.north], [ib.east, ib.south], [ib.west, ib.south]] });
+      }
+      if (!ca.map.getLayer(id)) {
+        ca.map.addLayer({ id: id, type: "raster", source: id, layout: { visibility: "none" },
+          paint: { "raster-opacity": ca.opacity, "raster-fade-duration": 0 } }, "ca-overlay");
+      }
+    });
     caRender();
   }
 
@@ -912,9 +930,14 @@
 
   function caRender() {
     if (!ca.layers) return;
-    // Satellite: draw fire only; otherwise draw the chosen data layer.
-    var b = ca.base === "satellite" ? null : ca.base;   // "landcover" | "ndvi" | "slope" | "difference"
+    // Satellite or a real-fire image: draw fire only; otherwise draw the chosen data layer.
+    var img = ca.layers.imagery[ca.base];
+    var b = ca.base === "satellite" || img ? null : ca.base;   // "landcover" | "ndvi" | "slope" | "difference" | "modeldiff"
     ca.renderer.draw(ca.model, ca.layers, b, ca.hill);
+    if (ca.map) Object.keys(ca.layers.imagery).forEach(function (key) {
+      var id = "ca-img-" + key;
+      if (ca.map.getLayer(id)) ca.map.setLayoutProperty(id, "visibility", key === ca.base ? "visible" : "none");
+    });
   }
   function caStats() {
     var s = ca.model.stats();
@@ -982,8 +1005,9 @@
       (L.elev ? ln("Elevation", Math.round(L.elev[i]) + " m") : "") +
       ln("Slope", L.slope[i].toFixed(1) + "°") +
       ln("Wind", ca.windSpd + " m/s, " + ca.windDir + "°") +
-      ln("State", stName) +
-      (L.observed ? ln("Real fire", L.observed[i] ? "Burned" : "Not burned") : "") +
+      ln("Model Burn State", stName) +
+      (L.severity ? ln("Rabbit Fire Burn State", L.severityClasses[L.severity[i]].name)
+        : L.observed ? ln("Rabbit Fire Burn State", L.observed[i] ? "Burned" : "Unburned") : "") +
       '<div class="prob">Chance of spreading: ' + level + '</div>';
   }
   // Legend: land-cover classes + fire states, or difference classes in difference mode.
@@ -993,6 +1017,12 @@
     var diff = DIFF[ca.base];
     if (diff) {
       Object.keys(diff.names).forEach(function (k) { html += item("rgb(" + diff.colors[k].join(",") + ")", diff.names[k]); });
+    } else if (L.imagery[ca.base]) {
+      // Real-fire images: severity classes (burn severity only) + the model fire drawn on top.
+      if (ca.base === "severity" && L.severityClasses) Object.keys(L.severityClasses).forEach(function (k) {
+        html += item("rgb(" + L.severityClasses[k].color.join(",") + ")", L.severityClasses[k].name);
+      });
+      html += item("#ff8c1a", "Model burning") + item("#2a1a12", "Model burned");
     } else {
       for (var i = 0; i < L.landcover.length; i++) present[L.landcover[i]] = true;
       Object.keys(LC).forEach(function (k) {
@@ -1020,7 +1050,9 @@
     var el = document.getElementById("ca-opacity"), out = document.getElementById("ca-opacity-v");
     el.addEventListener("input", function () {
       ca.opacity = parseFloat(el.value) / 100; out.textContent = el.value + "%"; paintSlider(el);
-      if (ca.map && ca.map.getLayer("ca-overlay")) ca.map.setPaintProperty("ca-overlay", "raster-opacity", ca.opacity);
+      if (!ca.map) return;
+      ["ca-overlay"].concat(Object.keys(ca.layers ? ca.layers.imagery : {}).map(function (k) { return "ca-img-" + k; }))
+        .forEach(function (id) { if (ca.map.getLayer(id)) ca.map.setPaintProperty(id, "raster-opacity", ca.opacity); });
     });
     paintSlider(el);
   })();
@@ -1028,6 +1060,9 @@
   var CA_DIFF_NOTES = {
     difference: "Current model vs the real fire.",
     modeldiff: "Original vs corrected model burns.",
+    severity: "Rabbit Fire burn severity from Sentinel-2 (dNBR), inside the real fire perimeter.",
+    prefire: "Sentinel-2 true color, Jun 27 \u2013 Jul 12, 2023.",
+    fire_20230717: "Sentinel-2 true color on Jul 17, 2023, during the fire.",
   };
   ["ca-baseSeg", "ca-diffSeg"].forEach(function (id) {
     document.getElementById(id).addEventListener("click", function (e) {

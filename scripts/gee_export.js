@@ -5,7 +5,7 @@
  * Drive, for the California dashboard:
  *
  *     1. landuse.tif      Dynamic World land cover (label band, mode composite)
- *     2. NDVI.tif         Landsat 9 NDVI (cloud-masked, median composite)
+ *     2. NDVI.tif         Sentinel-2 NDVI (cloud-masked, median composite)
  *     3. SlopeExport.tif  Slope in degrees (from SRTM)
  *     4. DEM.tif          Raw SRTM elevation (the web bundler derives hillshade)
  *
@@ -26,10 +26,11 @@ var RADIUS_M = 8000;
 var SCALE = 30;
 var CRS = 'EPSG:4326';
 
-// Pre-burn vegetation window: the weeks BEFORE the fire, so NDVI reflects
-// fuel conditions at ignition rather than the burn scar. Rabbit Fire started
-// 2023-07-14; filterDate's end is exclusive, so this covers May 1 - July 12.
-var DATE_START = '2023-05-01';
+// Pre-fire window for land cover and NDVI: the two weeks BEFORE the fire, so
+// they reflect conditions at ignition (7 Sentinel-2 passes, Jun 27 - Jul 12).
+// Same window as the pre-fire imagery in gee_burn_scar.js. Rabbit Fire started
+// 2023-07-14; filterDate's end is exclusive.
+var DATE_START = '2023-06-27';
 var DATE_END   = '2023-07-13';
 
 // Region: a square bounding box around the ignition point. bounds() gives an
@@ -48,28 +49,25 @@ var dw = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1')
   .select('label');
 var landcover = dw.reduce(ee.Reducer.mode()).rename('label').clip(REGION);
 
-// ==================== 2. NDVI (Landsat 9 Level-2 SR) =======================
-// Cloud-mask using the QA_PIXEL bitmask, apply the L2 SR scale factors, then
-// NDVI = (NIR - Red)/(NIR + Red) from SR_B5 (NIR) and SR_B4 (Red).
-function maskL9sr(img) {
-  var qa = img.select('QA_PIXEL');
-  // Bit 1 = dilated cloud, 3 = cloud, 4 = cloud shadow.
-  var mask = qa.bitwiseAnd(1 << 1).eq(0)
-    .and(qa.bitwiseAnd(1 << 3).eq(0))
-    .and(qa.bitwiseAnd(1 << 4).eq(0));
-  // Official Collection-2 Level-2 optical scaling.
-  var sr = img.select(['SR_B4', 'SR_B5'])
-    .multiply(0.0000275).add(-0.2);
-  return sr.updateMask(mask).copyProperties(img, ['system:time_start']);
+// ==================== 2. NDVI (Sentinel-2 SR) ==============================
+// Cloud-mask with the Scene Classification (SCL) band: drop cloud shadow (3),
+// clouds (8, 9), cirrus (10), and snow (11). Same satellite as Dynamic World
+// and the fire imagery. NDVI = (NIR - Red)/(NIR + Red) from B8 (NIR), B4 (Red).
+function maskS2(img) {
+  var scl = img.select('SCL');
+  var clear = scl.neq(3).and(scl.neq(8)).and(scl.neq(9))
+    .and(scl.neq(10)).and(scl.neq(11));
+  return img.select(['B4', 'B8']).updateMask(clear);
 }
-var l9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .filterBounds(REGION)
   .filterDate(DATE_START, DATE_END)
-  .map(maskL9sr);
-var ndvi = l9.median()
-  .normalizedDifference(['SR_B5', 'SR_B4'])  // (NIR - Red)/(NIR + Red)
+  .map(maskS2);
+var ndvi = s2.median()
+  .normalizedDifference(['B8', 'B4'])  // (NIR - Red)/(NIR + Red)
   .rename('NDVI')
   .clip(REGION);
+print('Sentinel-2 images in window:', s2.size());
 
 // ==================== 3. SLOPE + 4. DEM (SRTM) =============================
 var dem = ee.Image('USGS/SRTMGL1_003').select('elevation').clip(REGION);

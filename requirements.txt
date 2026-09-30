@@ -3,6 +3,7 @@
 
 numpy>=1.24
 rasterio>=1.3        # raster I/O + resampling for scripts/export_web_layers.py
+Pillow>=10           # web images (severity PNG, imagery JPEGs) in export_web_layers.py
 
 # The archived course notebooks (archive/course-project/) also used:
 # matplotlib, pandas, requests, folium, geopandas, shapely, scikit-image

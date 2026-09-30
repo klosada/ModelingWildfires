@@ -15,17 +15,19 @@ This project simulates where a wildfire is likely to burn across a real landscap
 
 | Layer | Source |
 |---|---|
-| Vegetation greenness (NDVI) | Landsat 9 Level-2, cloud-masked median composite, May 1 – Jul 12, 2023 (pre-fire) |
-| Land cover (fuel classes) | Google Dynamic World, most frequent class over the same window |
+| Vegetation greenness (NDVI) | Sentinel-2 surface reflectance, cloud-masked median composite, Jun 27 – Jul 12, 2023 (pre-fire) |
+| Land cover (fuel classes) | Google Dynamic World (built from Sentinel-2), most frequent class over the same window |
 | Elevation → slope, hillshade | SRTM 30 m elevation; slope from Earth Engine, hillshade derived in Python |
 | Wind speed and direction | Open-Meteo historical weather, Rabbit Fire day (Jul 14, 2023) |
 | Observed burn perimeter | CAL FIRE 2023 fire perimeter (GeoJSON) |
+| Burn severity (dNBR) | Sentinel-2, pre-fire (Jun 27 – Jul 12) vs post-fire (Jul 20 – 31) composites, classified inside the perimeter |
+| Fire imagery | Sentinel-2 true color: pre-fire composite and a single pass on Jul 17, 2023, during the fire |
 
 All raster layers are exported from Google Earth Engine with the same footprint, resolution, and coordinate system, so they line up cell for cell.
 
 **Tools:**
 - **Google Earth Engine** (JavaScript): satellite and terrain data export
-- **Python** (NumPy, rasterio): resampling, hillshade, perimeter rasterization, and the reference model
+- **Python** (NumPy, rasterio, Pillow): resampling, hillshade, perimeter rasterization, burn severity, web images, and the reference model
 - **HTML, CSS, and JavaScript + Mapbox GL JS**: the dashboards, in-browser model, and interactive satellite map
 - **Node.js**: automated tests of the browser model
 
@@ -35,7 +37,7 @@ An independent continuation of this project, built after the course to refine th
 
 The web app runs the wildfire spread model live in the browser as two interactive dashboards:
 
-- **California study area:** reconstructs the Rabbit Fire over a Mapbox satellite map. The fire animates step by step from the recorded ignition point, driven by the fire-day wind. The basemap switches between satellite, land cover, NDVI, and slope, and hovering any cell shows its data. A validation panel scores the run live against the observed burn perimeter and shows difference maps.
+- **California study area:** reconstructs the Rabbit Fire over a Mapbox satellite map. The fire animates step by step from the recorded ignition point, driven by the fire-day wind. The basemap switches between satellite, land cover, NDVI, and slope, and hovering any cell shows its data. A validation panel scores the run live against the observed burn perimeter and shows difference maps, real burn severity, and Sentinel-2 imagery from before and during the fire.
 - **Test It Yourself (sandbox):** a randomly generated landscape where every input can be adjusted (land cover, terrain, vegetation, and wind) to see how each environmental driver shapes fire spread in real time.
 
 Both dashboards can switch between the original and corrected spread models.
@@ -64,7 +66,7 @@ A weighted overlay of three normalized environmental layers: vegetation density 
 
 ## Validation and results
 
-Simulated burn extents are compared against the observed Rabbit Fire perimeter using intersection over union (IoU): cells burned in both the model and the real fire, divided by cells burned in either (1 = perfect match). The model has no firefighting, so fire would keep spreading until it ran out of fuel. Each run therefore stops once it has burned to the real fire's extent (8,355 acres), so IoU measures where the fire burned rather than how long it ran. A Burn Difference map shows matched, over-predicted, and missed cells.
+Simulated burn extents are compared against the observed Rabbit Fire perimeter using intersection over union (IoU): cells burned in both the model and the real fire, divided by cells burned in either (1 = perfect match). The model has no firefighting, so fire would keep spreading until it ran out of fuel. Each run therefore stops once it has burned to the real fire's extent (8,355 acres), so IoU measures where the fire burned rather than how long it ran. A Burn Difference map shows matched, over-predicted, and missed cells. Real burn severity comes from the change in Normalized Burn Ratio (dNBR) between pre- and post-fire Sentinel-2 composites, classified with USGS thresholds (Key & Benson, 2006) into unburned, low, moderate, and high, and kept only inside the fire perimeter so seasonal drying of crops and grass outside it isn't counted as burn.
 
 | Version | Rabbit Fire IoU |
 |---|---|
@@ -85,11 +87,12 @@ ModelingWildfires/
 ├── webapp/                  Interactive web app
 │   ├── index.html           Dashboards: California study area + sandbox
 │   ├── js/model.js          Fire spread model (browser copy of firemodel.py)
-│   └── data/layers.json     Study-area layers + observed burn perimeter
+│   └── data/                Study-area layers (layers.json) + real-fire images
 ├── scripts/                 Model, data pipeline, and tests
 │   ├── firemodel.py         Fire spread model (original + corrected), IoU validation
 │   ├── export_web_layers.py Earth Engine rasters → webapp/data/layers.json
 │   ├── gee_export.js        Earth Engine export of land cover, NDVI, slope, elevation
+│   ├── gee_burn_scar.js     Earth Engine export of fire imagery and burn severity (dNBR)
 │   └── verify_port.mjs      Tests the browser model
 ├── data/                    Rabbit Fire perimeter (raster exports are gitignored)
 └── archive/course-project/  Original Spring 2025 course notebooks, results, and report
@@ -102,7 +105,7 @@ cp webapp/js/config.example.js webapp/js/config.js   # then add your Mapbox publ
 cd webapp && python3 -m http.server 8000             # open http://localhost:8000
 ```
 
-To regenerate the study-area data: run `scripts/gee_export.js` in the Earth Engine Code Editor and download the four GeoTIFFs into `data/`, then:
+To regenerate the study-area data: run `scripts/gee_export.js` and `scripts/gee_burn_scar.js` in the Earth Engine Code Editor and download the GeoTIFFs into `data/`, then:
 
 ```
 pip install -r requirements.txt
@@ -139,5 +142,6 @@ The web app, data pipeline, model port, validation tools, and diagonal correctio
 ## References
 
 - Alexandridis, A., Vakalis, D., Siettos, C. I., & Bafas, G. V. (2008). A cellular automata model for forest fire spread prediction: The case of the wildfire that swept through Spetses Island in 1990. *Applied Mathematics and Computation*, 204(1), 191–201.
+- Key, C. H., & Benson, N. C. (2006). *Landscape assessment (LA): Sampling and analysis methods* (Gen. Tech. Rep. RMRS-GTR-164-CD). USDA Forest Service, Rocky Mountain Research Station.
 - Rothermel, R. C. (1972). *A mathematical model for predicting fire spread in wildland fuels* (Research Paper INT-115). USDA Forest Service, Intermountain Forest and Range Experiment Station.
 - Trucchia, A., D'Andrea, M., Baghino, F., Fiorucci, P., Ferraris, L., Negro, D., Gollini, A., & Severino, M. (2020). PROPAGATOR: An Operational Cellular-Automata Based Wildfire Simulator. *Fire*, 3(3), 26. https://doi.org/10.3390/fire3030026
