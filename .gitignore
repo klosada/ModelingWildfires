@@ -21,3 +21,7 @@ node_modules/
 
 # --- os / editor ---
 .DS_Store
+
+# --- vercel (local project link) ---
+.vercel
+.env*

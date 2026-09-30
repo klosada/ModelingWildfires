@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "node -e \"require('fs').writeFileSync('webapp/js/config.js', 'window.WILDFIRE_CONFIG = { MAPBOX_TOKEN: ' + JSON.stringify(process.env.MAPBOX_TOKEN || '') + ' };\\n')\"",
+  "outputDirectory": "webapp"
+}
