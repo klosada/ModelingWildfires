@@ -21,7 +21,7 @@ This project simulates where a wildfire is likely to burn across a real landscap
 | Wind speed and direction | Open-Meteo historical weather, Rabbit Fire day (Jul 14, 2023) |
 | Observed burn perimeter | CAL FIRE 2023 fire perimeter (GeoJSON) |
 | Burn severity (dNBR) | Sentinel-2, pre-fire (Jun 27 – Jul 12) vs post-fire (Jul 20 – 31) composites, classified inside the perimeter |
-| Fire imagery | Sentinel-2 true color: pre-fire composite and a single pass on Jul 17, 2023, during the fire |
+| Fire imagery | Sentinel-2 true color: pre-fire composite (Jun 27 – Jul 12) and a single post-fire pass on Jul 17, 2023 |
 
 All raster layers are exported from Google Earth Engine with the same footprint, resolution, and coordinate system, so they line up cell for cell.
 
@@ -37,7 +37,7 @@ An independent continuation of this project, built after the course to refine th
 
 The web app runs the wildfire spread model live in the browser as two interactive dashboards:
 
-- **California study area:** reconstructs the Rabbit Fire over a Mapbox satellite map. The fire animates step by step from the recorded ignition point, driven by the fire-day wind. The basemap switches between satellite, land cover, NDVI, and slope, and hovering any cell shows its data. A validation panel scores the run live against the observed burn perimeter and shows difference maps, real burn severity, and Sentinel-2 imagery from before and during the fire.
+- **California study area:** reconstructs the Rabbit Fire on an interactive Mapbox map. The fire animates step by step from the recorded ignition point, driven by the fire-day wind. The basemap switches between pre- and post-fire Sentinel-2 imagery, land cover, NDVI, and slope, and hovering any cell shows its data. A validation panel scores the run live against the observed burn perimeter and shows a burn difference map and real burn severity.
 - **Test It Yourself (sandbox):** a randomly generated landscape where every input can be adjusted (land cover, terrain, vegetation, and wind) to see how each environmental driver shapes fire spread in real time.
 
 Both dashboards can switch between the original and corrected spread models.

@@ -48,7 +48,7 @@
   .intro p + p { margin-top: 8px; }
   .intro a { color: var(--forest); font-weight: 600; }
   .intro a:hover { color: var(--green); }
-  .intro-tools { color: var(--ink-dim); font-size: 13px; font-style: italic; margin-top: 8px !important; }
+  .intro .intro-tools { color: var(--forest); font-weight: 700; font-style: italic; margin-top: 8px; }   /* same dark green as titles */
   .footnote { color: var(--ink-dim); font-size: 13px; text-align: center; max-width: 1200px; margin: 8px auto 28px; padding: 0 20px; }
 
   /* --- section --- */
@@ -57,7 +57,13 @@
   .section > .sub { color: var(--ink); font-size: 14px; margin: 0 0 12px; }
   .section > p.sub:has(+ ul.sub) { margin-bottom: 4px; }
   .section > ul.sub { padding-left: 20px; }
-  .section > p.sub.subhead { color: var(--forest); font-weight: 800; }
+  .section > p.sub.subhead, .details .subhead { color: var(--forest); font-weight: 800; }
+  /* collapsible "Data and validation details" under the California description */
+  .details { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
+  .details summary { cursor: pointer; color: var(--forest); font-weight: 700; width: fit-content; }
+  .details summary:hover { color: var(--green); }
+  .details .subhead { margin: 8px 0 4px; }
+  .details ul { padding-left: 20px; margin: 0; }
 
   .demo-body { display: flex; gap: 14px; height: 600px; }
   /* California map: square, same green frame as the sandbox canvas */
@@ -72,7 +78,7 @@
   }
 
   /* left rail: always-visible legend + inspector */
-  .rail { width: 214px; flex: 0 0 214px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .rail { width: 250px; flex: 0 0 250px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
   .viewport { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center;
               background: transparent; overflow: hidden; }
   canvas.render { image-rendering: pixelated; image-rendering: crisp-edges; max-width: 100%; max-height: 100%;
@@ -142,14 +148,17 @@
   .compass svg { flex: 0 0 auto; }
 
   /* inspector */
-  .inspector .k { color: var(--ink-dim); } .inspector .v { color: var(--ink); float: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .inspector .line { clear: both; margin: 2px 0; font-size: 12.5px; }
+  .inspector .k { color: var(--ink-dim); } .inspector .v { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .inspector .line { display: flex; justify-content: space-between; gap: 8px; margin: 2px 0; font-size: 12.5px; }
   .inspector .prob { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--fire); font-weight: 800; }
 
   /* legend */
   .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; }
   .legend .li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim); }
   .legend .sw { width: 13px; height: 13px; border-radius: 4px; flex: 0 0 auto; border: 1px solid rgba(20,60,40,.12); }
+  .legend .grad { grid-column: 1 / -1; font-size: 12px; color: var(--ink-dim); }
+  .legend .grad .bar { height: 12px; border-radius: 4px; margin: 4px 0 2px; border: 1px solid rgba(20,60,40,.12); }
+  .legend .grad .ends { display: flex; justify-content: space-between; padding: 0; margin: 0; }
 
   /* California: missing-token message */
   .ca-placeholder { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; text-align: center;
@@ -184,16 +193,21 @@
   <div class="section" id="sec-ca">
     <h2>California Study Area</h2>
     <p class="sub">Reconstructs the Rabbit Fire that ignited on July 14, 2023 in Riverside County, California, using real environmental data.</p>
-    <ul class="sub">
-      <li><em>Cell-level data:</em> Dynamic World land cover, Sentinel-2 NDVI, and SRTM elevation with its derived slope were exported from Google Earth Engine and also used as basemaps.</li>
+    <details class="details">
+    <summary>Data and validation details</summary>
+    <p class="subhead">Data</p>
+    <ul>
+      <li><em>Cell-level data:</em> Dynamic World land cover, Sentinel-2 NDVI, and SRTM elevation with its derived slope were exported from Google Earth Engine and also used as basemaps, along with Sentinel-2 pre- and post-fire imagery.</li>
       <li><em>Uniform across all cells:</em> Wind speed and direction from the fire day were pulled from Open-Meteo historical weather data.</li>
     </ul>
-    <p class="sub subhead">Validation</p>
-    <ul class="sub">
+    <p class="subhead">Validation</p>
+    <ul>
       <li><em>IoU:</em> Cells burned in both the model and the real Rabbit Fire &divide; cells burned in either (1 = perfect match).</li>
+      <li><em>Burn severity:</em> dNBR (change in Normalized Burn Ratio) between Sentinel-2 composites from before (Jun 27&ndash;Jul 12) and after (Jul 20&ndash;31) the fire, classified with USGS thresholds into unburned, low, moderate, and high, inside the real fire perimeter.</li>
       <li><em>Corrected model:</em> Diagonal cells are about 1.4&times; farther away than side cells, so fire takes one extra step to reach them. This keeps burns from growing in square shapes.</li>
       <li><em>Stopping point:</em> The model has no firefighting, so each run stops once it has burned to the real fire's extent (8,355 acres).</li>
     </ul>
+    </details>
     <div class="demo-body">
       <div class="rail">
         <div class="card"><h3>Legend</h3><div class="legend" id="ca-legend"></div></div>
@@ -225,7 +239,8 @@
 
         <h3>Map layer</h3>
         <div class="layerseg grid2" id="ca-baseSeg">
-          <button data-base="satellite" aria-pressed="true">Satellite</button>
+          <button data-base="prefire" aria-pressed="true">Pre-Fire Imagery</button>
+          <button data-base="postfire" aria-pressed="false">Post-Fire Imagery</button>
           <button data-base="landcover" aria-pressed="false">Land cover</button>
           <button data-base="ndvi" aria-pressed="false">NDVI</button>
           <button data-base="slope" aria-pressed="false">Slope</button>
@@ -263,10 +278,7 @@
           </div>
           <div class="layerseg grid2" id="ca-diffSeg">
             <button data-base="difference" aria-pressed="false">Burn Difference</button>
-            <button data-base="modeldiff" aria-pressed="false">Model Difference</button>
             <button data-base="severity" aria-pressed="false">Burn Severity</button>
-            <button data-base="prefire" aria-pressed="false">Pre-Fire Imagery</button>
-            <button data-base="fire_20230717" aria-pressed="false">Jul 17 Fire Imagery</button>
           </div>
           <p class="val-note" id="ca-diff-note"></p>
 
@@ -480,6 +492,9 @@
     this.off = document.createElement("canvas"); this.offctx = this.off.getContext("2d");
     this.SCALE = 5;
   }
+  Renderer.prototype.clear = function () {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  };
   Renderer.prototype.resize = function (n) {
     this.n = n; this.off.width = n; this.off.height = n;
     this.img = this.offctx.createImageData(n, n);
@@ -493,8 +508,7 @@
       var s = grid[i], r, g, b, a = 255;
       if (diffMode) {
         // Difference maps (classes 1-3); other cells transparent.
-        var k = base === "difference" ? M.diffClass(s, layers.observed[i]) : layers.modelDiff[i];
-        var dc = diffMode.colors[k];
+        var dc = diffMode.colors[M.diffClass(s, layers.observed[i])];
         if (dc) { r = dc[0]; g = dc[1]; b = dc[2]; } else { r = 0; g = 0; b = 0; a = 0; }
       } else if (s === BURNING) {
         var t = res > 2 ? Math.min((age[i] - 1) / (res - 1), 1) : 0;
@@ -542,13 +556,10 @@
   // NDVI: red (low) -> yellow -> green (dense vegetation)
   var NDVI_STOPS = [[-0.1, [165, 0, 38]], [0.1, [215, 48, 39]], [0.25, [253, 174, 97]],
                     [0.4, [254, 224, 139]], [0.55, [166, 217, 106]], [0.7, [102, 189, 99]], [0.85, [26, 152, 80]]];
-  // Difference maps (class index = M.MATCH / M.OVER / M.MISSED).
-  //   difference: live model vs real fire; modeldiff: corrected vs original final burns.
+  // Burn difference map: live model vs real fire (class index = M.MATCH / M.OVER / M.MISSED).
   var DIFF = {
     difference: { colors: {1: [46, 160, 90], 2: [236, 120, 40], 3: [60, 110, 205]},
                   names: {1: "Match", 2: "Over-predicted", 3: "Missed"} },
-    modeldiff:  { colors: {1: [46, 160, 90], 2: [236, 120, 40], 3: [60, 110, 205]},   // same colors as difference
-                  names: {1: "Both versions", 3: "Original only", 2: "Corrected only"} },
   };
   // Slope: white (flat) -> teal -> blue (steep)
   var SLOPE_STOPS = [[0, [255, 255, 255]], [12, [199, 233, 237]], [25, [65, 182, 196]], [40, [34, 94, 168]]];
@@ -564,6 +575,36 @@
       return ramp(SLOPE_STOPS, layers.slope[i]);
     }
     return (LC[layers.landcover[i]] || LC[5]).rgb;
+  }
+
+  // --- Legends (shared by both dashboards) ---
+  function legendItem(color, name) {
+    return '<div class="li"><span class="sw" style="background:' + color + '"></span>' + name + '</div>';
+  }
+  // A color ramp as a gradient bar with end labels (NDVI, slope).
+  function legendRamp(title, stops, lowLabel, highLabel) {
+    var lo = stops[0][0], hi = stops[stops.length - 1][0];
+    var css = stops.map(function (st) {
+      return "rgb(" + st[1].join(",") + ") " + Math.round((st[0] - lo) / (hi - lo) * 100) + "%";
+    }).join(", ");
+    return '<div class="grad">' + title + '<div class="bar" style="background:linear-gradient(to right, ' + css + ')"></div>' +
+      '<div class="ends"><span>' + lowLabel + '</span><span>' + highLabel + '</span></div></div>';
+  }
+  // Legend for a base data layer: land-cover classes present, or the NDVI / slope ramp.
+  function baseLegend(base, layers) {
+    var i, html = "";
+    if (base === "ndvi") {
+      html = legendRamp("NDVI (vegetation greenness)", NDVI_STOPS, "&minus;0.1 bare", "0.85 dense");
+      for (i = 0; i < layers.ndvi.length; i++) if (layers.ndvi[i] <= NODATA + 1) return html + legendItem("rgb(125,125,130)", "No data");
+      return html;
+    }
+    if (base === "slope") return legendRamp("Slope", SLOPE_STOPS, "0&deg; flat", "40&deg;+ steep");
+    var present = {};
+    for (i = 0; i < layers.landcover.length; i++) present[layers.landcover[i]] = true;
+    Object.keys(LC).forEach(function (k) {
+      if (present[k]) html += legendItem("rgb(" + LC[k].rgb.join(",") + ")", LC[k].name);
+    });
+    return html;
   }
 
   // =========================================================================
@@ -743,7 +784,7 @@
   document.getElementById("baseSeg").addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;
     [].forEach.call(this.querySelectorAll("button"), function (x) { x.setAttribute("aria-pressed", "false"); });
-    b.setAttribute("aria-pressed", "true"); sandbox.base = b.dataset.base; render();
+    b.setAttribute("aria-pressed", "true"); sandbox.base = b.dataset.base; render(); buildLegend();
   });
 
   // Rotate compass arrow to the wind direction.
@@ -757,18 +798,10 @@
       '<polygon points="' + ax.toFixed(1) + ',' + ay.toFixed(1) + ' ' + p1x.toFixed(1) + ',' + p1y.toFixed(1) + ' ' + p2x.toFixed(1) + ',' + p2y.toFixed(1) + '" fill="#1b5e3f"/>';
   }
 
-  // Legend: only classes present on the map, plus fire states.
+  // Legend: the chosen layer (land-cover classes or NDVI / slope ramp), plus fire states.
   function buildLegend() {
-    var present = {}, L = sandbox.layers;
-    for (var i = 0; i < L.landcover.length; i++) present[L.landcover[i]] = true;
-    var html = "";
-    Object.keys(LC).forEach(function (k) {
-      if (!present[k]) return; var c = LC[k];
-      html += '<div class="li"><span class="sw" style="background:rgb(' + c.rgb.join(",") + ')"></span>' + c.name + '</div>';
-    });
-    html += '<div class="li"><span class="sw" style="background:#ff8c1a"></span>Burning</div>';
-    html += '<div class="li"><span class="sw" style="background:#2a1a12"></span>Burned</div>';
-    document.getElementById("legend").innerHTML = html;
+    document.getElementById("legend").innerHTML = baseLegend(sandbox.base, sandbox.layers) +
+      legendItem("#ff8c1a", "Burning") + legendItem("#2a1a12", "Burned");
   }
 
   // --- start ---
@@ -789,7 +822,7 @@
   var ca = {
     inited: false, map: null, model: null, layers: null,
     canvas: document.createElement("canvas"), renderer: null,
-    base: "satellite", hill: true, opacity: 0.85,
+    base: "prefire", hill: true, opacity: 0.85,
     windSpd: 4, windDir: 110, playing: false, hover: -1,   // fire-day wind (Open-Meteo), fixed
     diagonalDelay: false,                                  // model version: original / diagonal-corrected
     coeffs: { P0: 0.58, C1: 0.045, C2: 0.131, A: 0.078 },
@@ -890,7 +923,7 @@
   // Burned the real fire's area yet? (the auto-stop point)
   function caReachedRealArea(v) { return v.match + v.over >= v.match + v.missed; }
 
-  // Run both versions to the stop point once: final IoUs + Model Difference map.
+  // Run both versions to the stop point once, for their final IoUs.
   function caCompareVersions() {
     var L = ca.layers; if (!L.observed) return;
     var fin = [false, true].map(function (dd) {
@@ -898,14 +931,8 @@
       for (var s = 0; s < 2000 && !caReachedRealArea(v); s++) {
         m.tick(ca.windSpd, modelWindDir(ca.windDir)); v = M.compareToObserved(m.grid, L.observed);
       }
-      return { grid: m.grid, iou: v.iou };
+      return { iou: v.iou };
     });
-    // Classes: 1 = both, 2 = corrected only, 3 = original only (M.diffClass(corrected, original)).
-    L.modelDiff = new Uint8Array(fin[0].grid.length);
-    for (var i = 0; i < L.modelDiff.length; i++) {
-      var o = fin[0].grid[i];
-      L.modelDiff[i] = M.diffClass(fin[1].grid[i], o === BURNING || o === BURNED);
-    }
     document.getElementById("ca-iou-orig").textContent = fin[0].iou.toFixed(2);
     document.getElementById("ca-iou-corr").textContent = fin[1].iou.toFixed(2);
   }
@@ -930,14 +957,17 @@
 
   function caRender() {
     if (!ca.layers) return;
-    // Satellite or a real-fire image: draw fire only; otherwise draw the chosen data layer.
+    // Imagery or burn severity: draw fire only; otherwise draw the chosen data layer.
     var img = ca.layers.imagery[ca.base];
-    var b = ca.base === "satellite" || img ? null : ca.base;   // "landcover" | "ndvi" | "slope" | "difference" | "modeldiff"
-    ca.renderer.draw(ca.model, ca.layers, b, ca.hill);
+    var b = img ? null : ca.base;   // "landcover" | "ndvi" | "slope" | "difference"
+    if (ca.base === "severity") ca.renderer.clear();   // real burn severity alone, no model fire on top
+    else ca.renderer.draw(ca.model, ca.layers, b, ca.hill);
     if (ca.map) Object.keys(ca.layers.imagery).forEach(function (key) {
       var id = "ca-img-" + key;
       if (ca.map.getLayer(id)) ca.map.setLayoutProperty(id, "visibility", key === ca.base ? "visible" : "none");
     });
+    if (ca.map && ca.map.getLayer("ca-overlay"))
+      ca.map.setLayoutProperty("ca-overlay", "visibility", ca.base === "severity" ? "none" : "visible");
   }
   function caStats() {
     var s = ca.model.stats();
@@ -1012,23 +1042,18 @@
   }
   // Legend: land-cover classes + fire states, or difference classes in difference mode.
   function caBuildLegend() {
-    var present = {}, L = ca.layers, html = "";
-    function item(rgb, name) { return '<div class="li"><span class="sw" style="background:' + rgb + '"></span>' + name + '</div>'; }
+    var L = ca.layers, html = "", item = legendItem;
     var diff = DIFF[ca.base];
     if (diff) {
       Object.keys(diff.names).forEach(function (k) { html += item("rgb(" + diff.colors[k].join(",") + ")", diff.names[k]); });
     } else if (L.imagery[ca.base]) {
-      // Real-fire images: severity classes (burn severity only) + the model fire drawn on top.
-      if (ca.base === "severity" && L.severityClasses) Object.keys(L.severityClasses).forEach(function (k) {
+      // Burn severity: its classes only (no model fire). Imagery: the model fire drawn on top.
+      if (ca.base === "severity") Object.keys(L.severityClasses || {}).forEach(function (k) {
         html += item("rgb(" + L.severityClasses[k].color.join(",") + ")", L.severityClasses[k].name);
       });
-      html += item("#ff8c1a", "Model burning") + item("#2a1a12", "Model burned");
+      else html += item("#ff8c1a", "Model burning") + item("#2a1a12", "Model burned");
     } else {
-      for (var i = 0; i < L.landcover.length; i++) present[L.landcover[i]] = true;
-      Object.keys(LC).forEach(function (k) {
-        if (present[k]) html += item("rgb(" + LC[k].rgb.join(",") + ")", LC[k].name);
-      });
-      html += item("#ff8c1a", "Burning") + item("#2a1a12", "Burned");
+      html += baseLegend(ca.base, L) + item("#ff8c1a", "Burning") + item("#2a1a12", "Burned");
     }
     document.getElementById("ca-legend").innerHTML = html;
   }
@@ -1057,12 +1082,9 @@
     paintSlider(el);
   })();
   // Map layer: one choice across the Map layer and Validation buttons.
-  var CA_DIFF_NOTES = {
+  var CA_NOTES = {   // Validation layers only
     difference: "Current model vs the real fire.",
-    modeldiff: "Original vs corrected model burns.",
     severity: "Rabbit Fire burn severity from Sentinel-2 (dNBR), inside the real fire perimeter.",
-    prefire: "Sentinel-2 true color, Jun 27 \u2013 Jul 12, 2023.",
-    fire_20230717: "Sentinel-2 true color on Jul 17, 2023, during the fire.",
   };
   ["ca-baseSeg", "ca-diffSeg"].forEach(function (id) {
     document.getElementById(id).addEventListener("click", function (e) {
@@ -1070,7 +1092,7 @@
       [].forEach.call(document.querySelectorAll("#ca-baseSeg button, #ca-diffSeg button"),
         function (x) { x.setAttribute("aria-pressed", "false"); });
       btn.setAttribute("aria-pressed", "true"); ca.base = btn.dataset.base;
-      document.getElementById("ca-diff-note").textContent = CA_DIFF_NOTES[ca.base] || "";
+      document.getElementById("ca-diff-note").textContent = CA_NOTES[ca.base] || "";
       caRender(); caBuildLegend();
     });
   });

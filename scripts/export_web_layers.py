@@ -9,8 +9,8 @@ the observed burn perimeter as grid cells (for validation).
 
 If the Sentinel-2 exports from scripts/gee_burn_scar.js are present, it also adds
 real-fire layers: burn severity per cell (dNBR classes inside the perimeter,
-unburned outside) plus web images of burn severity, pre-fire imagery, and the
-Jul 17 during-fire imagery (written next to layers.json).
+unburned outside) plus web images of burn severity and the pre- and post-fire
+(Jul 17) imagery, written next to layers.json.
 
 Usage:
     python scripts/export_web_layers.py --in data --out webapp/data/layers.json --size 160
@@ -67,9 +67,9 @@ SEVERITY_META = {
 # Sentinel-2 true-color exports -> web images (layer key, tif, output file).
 IMAGERY = [
     ("prefire", "S2_prefire_truecolor.tif", "prefire.jpg"),
-    ("fire_20230717", "S2_during_20230717_truecolor.tif", "fire_20230717.jpg"),
+    ("postfire", "S2_during_20230717_truecolor.tif", "postfire_20230717.jpg"),
 ]
-IMAGE_WIDTH = 1280   # px; plenty for the map, keeps each image small
+# Images keep the exports' full resolution (10 m), the sharpest the data allows.
 
 # Ignition point (lat, lon).
 IGNITION_POINTS = [
@@ -106,10 +106,9 @@ def classify_severity(dnbr, inside):
 def write_severity_image(dnbr_path, shapes, out_path):
     """Full-detail burn severity map (inside the perimeter) as a PNG; returns its bounds."""
     with rasterio.open(dnbr_path) as src:
-        h = round(IMAGE_WIDTH * src.height / src.width)
-        dnbr = src.read(1, out_shape=(h, IMAGE_WIDTH), resampling=Resampling.average)
+        dnbr = src.read(1)
         b = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
-    sev = classify_severity(dnbr, perimeter_mask(shapes, b, IMAGE_WIDTH, h))
+    sev = classify_severity(dnbr, perimeter_mask(shapes, b, dnbr.shape[1], dnbr.shape[0]))
     palette = np.array([SEVERITY_META[k][1] for k in sorted(SEVERITY_META)], dtype="uint8")
     Image.fromarray(palette[sev]).save(out_path, optimize=True)
     return b
@@ -118,8 +117,7 @@ def write_severity_image(dnbr_path, shapes, out_path):
 def write_true_color_image(tif_path, out_path):
     """3-band true-color GeoTIFF -> JPEG for the web; returns its bounds."""
     with rasterio.open(tif_path) as src:
-        h = round(IMAGE_WIDTH * src.height / src.width)
-        rgb = src.read([1, 2, 3], out_shape=(3, h, IMAGE_WIDTH), resampling=Resampling.average)
+        rgb = src.read([1, 2, 3])
         b = transform_bounds(src.crs, "EPSG:4326", *src.bounds)
     Image.fromarray(np.transpose(rgb, (1, 2, 0)).astype("uint8")).save(out_path, quality=85, optimize=True)
     return b
