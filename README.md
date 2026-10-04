@@ -5,7 +5,7 @@
 
 Built for a Modeling & Simulation course at Georgia Tech, Spring 2025.
 
-Later independently expanded into a geospatial web app with interactive dashboards.
+Later independently expanded into a geospatial web app with interactive dashboards: [katherinelosada.com/wildfire](https://katherinelosada.com/wildfire)
 
 ## Overview
 
@@ -23,32 +23,30 @@ This project simulates where a wildfire is likely to burn across a real landscap
 | Burn severity (dNBR) | Sentinel-2, pre-fire (Jun 27 – Jul 12) vs post-fire (Jul 20 – 31) composites, classified inside the perimeter |
 | Fire imagery | Sentinel-2 true color: pre-fire composite (Jun 27 – Jul 12) and a single post-fire pass on Jul 17, 2023 |
 
-All raster layers are exported from Google Earth Engine with the same footprint, resolution, and coordinate system, so they line up cell for cell.
+All rasters share one footprint and coordinate system, so they line up (model inputs at 30 m, imagery and dNBR at 10 m).
 
 **Tools:**
 - **Google Earth Engine** (JavaScript): satellite and terrain data export
 - **Python** (NumPy, rasterio, Pillow): resampling, hillshade, perimeter rasterization, burn severity, web images, and the reference model
-- **HTML, CSS, and JavaScript + Mapbox GL JS**: the dashboards, in-browser model, and interactive satellite map
+- **HTML, CSS, and JavaScript + Mapbox GL JS**: the dashboards, in-browser model, and interactive map
 - **Node.js**: automated tests of the browser model
 
 ## Interactive geospatial web app
 
-An independent continuation of this project, built after the course to refine the model and develop it into an interactive geospatial platform. This extension is my own work.
-
 The web app runs the wildfire spread model live in the browser as two interactive dashboards:
 
-- **California study area:** reconstructs the Rabbit Fire on an interactive Mapbox map. The fire animates step by step from the recorded ignition point, driven by the fire-day wind. The basemap switches between pre- and post-fire Sentinel-2 imagery, land cover, NDVI, and slope, and hovering any cell shows its data. A validation panel scores the run live against the observed burn perimeter and shows a burn difference map and real burn severity.
-- **Test It Yourself (sandbox):** a randomly generated landscape where every input can be adjusted (land cover, terrain, vegetation, and wind) to see how each environmental driver shapes fire spread in real time.
+- **California study area:** reconstructs the Rabbit Fire on an interactive Mapbox map, animating spread step by step from the recorded ignition point under the fire-day wind. Basemaps include pre- and post-fire Sentinel-2 imagery, land cover, NDVI, and slope; hovering a cell shows its data. A validation panel scores the run live against the observed perimeter, with burn difference and real burn severity maps.
+- **Test It Yourself (sandbox):** a randomly generated landscape where land cover, terrain, vegetation, and wind can all be adjusted to see how each shapes fire spread.
 
 Both dashboards can switch between the original and corrected spread models.
 
-**Data pipeline:** Earth Engine exports the aligned rasters (`scripts/gee_export.js`). A Python script resamples them onto the simulation grid, derives hillshade, rasterizes the observed perimeter, and bundles everything into one JSON file for the browser (`scripts/export_web_layers.py`). The model is ported line for line from Python to JavaScript so it runs in the browser, and automated tests check the port (`scripts/verify_port.mjs`).
+**Data pipeline:** Earth Engine exports the rasters (`scripts/gee_export.js`, `scripts/gee_burn_scar.js`). A Python script (`scripts/export_web_layers.py`) resamples them to the simulation grid, derives hillshade, rasterizes the perimeter, classifies burn severity, and writes the model data and web images. The model is ported line for line from Python to JavaScript, and automated tests check the port (`scripts/verify_port.mjs`).
 
 ## Model
 
 ### Spread model
 
-Fire propagates outward from a seeded ignition point at discrete timesteps. At each step, a burning cell can ignite any of the eight cells that touch it: the four sharing an edge plus the four sharing a corner. This is the Moore neighborhood, the standard 3×3 window used in cellular automata. Whether a given neighbor ignites depends on its vegetation density and fuel type, the local slope, and how closely the direction of spread aligns with prevailing wind. Following Alexandridis et al. (2008):
+Fire spreads from a seeded ignition point in discrete timesteps: each burning cell can ignite its 8 neighbors (the Moore neighborhood). The chance depends on the neighbor's vegetation density and fuel type, the local slope, and how closely the spread direction aligns with the wind (Alexandridis et al., 2008):
 
 ```
 P = P0 · (1 + P_veg) · (1 + P_den) · exp(C1·V) · exp(C2·V·(cos θ − 1)) · exp(A·slope)
@@ -58,15 +56,17 @@ P = P0 · (1 + P_veg) · (1 + P_den) · exp(C1·V) · exp(C2·V·(cos θ − 1))
 
 ### Corrected spread model
 
-In an 8-neighbor grid, fire reaches diagonal cells as fast as side cells even though they are √2 (≈1.41×) farther away, so burns grow in square shapes. Following the distance-based spread timing used in PROPAGATOR (Trucchia et al., 2020), where the time to reach a cell is distance divided by spread speed, the corrected model delays spread to diagonal cells by one step. Because the model advances in whole steps, this makes diagonal spread take 1.5× as long rather than exactly 1.41×. On uniform terrain, burns become close to round, and the Rabbit Fire IoU rises from 0.73 to 0.75.
+Diagonal cells are √2 (≈1.41×) farther away than side cells, so plain 8-neighbor spread grows square burns. Following the distance-based spread timing of PROPAGATOR (Trucchia et al., 2020), the corrected model delays spread to diagonal cells by one step (1.5× as long, since steps are whole, rather than exactly √2×). Burns on uniform terrain become nearly round, and the Rabbit Fire IoU rises from 0.73 to 0.75.
 
 ### Ignition model
 
-A weighted overlay of three normalized environmental layers: vegetation density (NDVI, weight 0.25), slope (0.15), and land cover (0.15), using the literature-derived weights from the course project's model. The weighted layers are summed and rescaled to a 0–1 ignition probability using a logistic function, ranking every cell by likelihood of ignition. The sandbox starts its fire at the highest-risk cell; the California dashboard uses the Rabbit Fire's recorded ignition point.
+A logistic weighted overlay of three normalized layers: vegetation density (NDVI, weight 0.25), slope (0.15), and land cover (0.15), using the course model's literature-derived weights. It ranks every cell by ignition probability (0–1). The sandbox starts its fire at the highest-risk cell; the California dashboard uses the Rabbit Fire's recorded ignition point.
 
 ## Validation and results
 
-Simulated burn extents are compared against the observed Rabbit Fire perimeter using intersection over union (IoU): cells burned in both the model and the real fire, divided by cells burned in either (1 = perfect match). The model has no firefighting, so fire would keep spreading until it ran out of fuel. Each run therefore stops once it has burned to the real fire's extent (8,355 acres), so IoU measures where the fire burned rather than how long it ran. A Burn Difference map shows matched, over-predicted, and missed cells. Real burn severity comes from the change in Normalized Burn Ratio (dNBR) between pre- and post-fire Sentinel-2 composites, classified with USGS thresholds (Key & Benson, 2006) into unburned, low, moderate, and high, and kept only inside the fire perimeter so seasonal drying of crops and grass outside it isn't counted as burn.
+- **IoU:** cells burned in both the model and the observed Rabbit Fire perimeter ÷ cells burned in either (1 = perfect match). A Burn Difference map shows matched, over-predicted, and missed cells.
+- **Stopping point:** the model has no firefighting, so each run stops once it has burned the real fire's extent (8,355 acres); IoU then measures where the fire burned, not how long it ran.
+- **Burn severity:** dNBR (change in Normalized Burn Ratio) between pre- and post-fire Sentinel-2 composites, classified with USGS thresholds (Key & Benson, 2006) into unburned, low, moderate, and high, inside the fire perimeter only, so seasonal drying of crops and grass outside it isn't counted as burn.
 
 | Version | Rabbit Fire IoU |
 |---|---|
@@ -74,11 +74,9 @@ Simulated burn extents are compared against the observed Rabbit Fire perimeter u
 | Current model | 0.73 |
 | Corrected model | 0.75 |
 
-Current and corrected values are averages over 10 random seeds. The current pipeline uses fire-day wind from Open-Meteo instead of a generic wind field, pre-fire satellite composites on one aligned grid, a new 160 × 160 simulation grid, and runs stopped at the observed burn area. These changes were not tested one at a time, so the improvement can't be attributed to any single one.
+Current and corrected values average 10 random seeds. The gain over the course version reflects several changes together (fire-day wind, pre-fire composites on one aligned grid, a 160 × 160 grid, and the area-matched stop), which weren't tested individually.
 
-Land cover controlled spread more than any other input: built-up areas, crops, and bare ground acted as firebreaks, water as an absolute barrier, and fire moved fastest through tree cover. Wind direction determined which way the fire advanced.
-
-The remaining mismatch reflects factors the model cannot capture: where crews contained the fire, local microclimate, and terrain-channeled wind, none of which a spatially uniform wind field can represent.
+Land cover controlled spread most: built-up areas, crops, and bare ground acted as firebreaks, water as a barrier, and fire moved fastest through trees; wind set the direction. The remaining mismatch reflects what the model can't capture: where crews contained the fire, local microclimate, and terrain-channeled wind.
 
 ## Project structure
 
@@ -116,8 +114,8 @@ Run the model tests with `node scripts/verify_port.mjs`.
 
 ## Limitations
 
-- **Empirical, not physics-based:** Physics-based models such as Rothermel's (1972) calculate fire spread rate in real units (m/min) from measured fuel properties and fuel moisture. This model uses land cover and vegetation greenness as fuel proxies in empirically fitted spread probabilities, so it has no fuel moisture and its timesteps are not tied to real time.
-- **No firefighting:** Simulated perimeters represent unmitigated spread. Stopping runs at the observed burn area makes the comparison fair but does not model containment.
+- **Empirical, not physics-based:** Unlike Rothermel's (1972) physics-based model, which computes spread rate (m/min) from measured fuel properties and moisture, this model uses land cover and NDVI as fuel proxies in fitted probabilities, without fuel moisture or real-time timesteps.
+- **No firefighting:** Simulated perimeters represent unmitigated spread; the area-matched stop keeps scoring fair but doesn't model containment.
 - **Uniform wind:** A single speed and direction applies to the whole grid for the whole fire.
 - **Static vegetation:** Vegetation is one pre-fire snapshot rather than seasonally curing fuel.
 - **Whole-step diagonal correction:** Diagonal spread takes 1.5× as long rather than exactly √2×.
